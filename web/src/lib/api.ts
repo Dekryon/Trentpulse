@@ -39,6 +39,22 @@ export async function askQuestion(question: string): Promise<{ text: string; sou
   return r.json()
 }
 
+// Photo check-in: Gemini suggests a 1..5 level from a photo of the room.
+// level is null when the photo can't be judged (outdoors, too dark, not a room).
+export async function estimateFromPhoto(photo: { data: string; mimeType: string }): Promise<{ level: 1 | 2 | 3 | 4 | 5 | null; reason: string }> {
+  if (!BASE) throw new Error('Photo check needs the live API. Pick a level yourself.')
+  const r = await fetch(BASE + '/api/photo-estimate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: photo.data, mimeType: photo.mimeType }),
+  })
+  if (!r.ok) {
+    const body = await r.json().catch(() => null) as { error?: string } | null
+    throw new Error(body?.error ?? "Couldn't check the photo. Pick a level yourself.")
+  }
+  return r.json()
+}
+
 // Tiger Data numbers (rows, compression, query time). Demo mode has no database,
 // so it returns null and the tile stays hidden rather than showing made-up figures.
 export function fetchStats(): Promise<StatsResponse | null> {

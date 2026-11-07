@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { SPACES } from '../lib/spaces'
 import { OFF_CAMPUS_METERS, TRUSTED_ACCURACY_METERS, formatDistance, nearestSpace } from '../lib/nearby'
+import { estimateFromPhoto } from '../lib/api'
+import { shrinkPhoto } from '../lib/photo'
 import type { CheckinBody } from '../lib/types'
+
+// Optional photo step: Gemini suggests a level, the student confirms with one tap.
+type Photo =
+  | { kind: 'idle' }
+  | { kind: 'checking' }
+  | { kind: 'suggested'; level: CheckinBody['level']; reason: string }
+  | { kind: 'unsure'; text: string }
 
 // Optional location step. Only runs when the student taps "Use my location".
 type Locate =
@@ -75,6 +84,26 @@ export function CheckInSheet({ initialSpace, onSubmit, onClose }: {
 
   const blocked = locate.kind === 'away'
 
+  // Photo check-in: shrink the photo on the phone, ask Gemini for a level,
+  // then highlight that level so the student can confirm it with one tap.
+  const [photo, setPhoto] = useState<Photo>({ kind: 'idle' })
+  const fileRef = useRef<HTMLInputElement>(null)
+  async function onPhotoPicked(file: File | undefined) {
+    if (!file) return
+    setPhoto({ kind: 'checking' })
+    try {
+      const est = await estimateFromPhoto(await shrinkPhoto(file))
+      setPhoto(est.level
+        ? { kind: 'suggested', level: est.level, reason: est.reason }
+        : { kind: 'unsure', text: est.reason || "Couldn't judge this photo. Pick a level yourself." })
+    } catch (e) {
+      setPhoto({ kind: 'unsure', text: e instanceof Error ? e.message : "Couldn't check the photo. Pick a level yourself." })
+    } finally {
+      if (fileRef.current) fileRef.current.value = '' // allow picking the same photo again
+    }
+  }
+  const suggested = photo.kind === 'suggested' ? photo.level : null
+
   async function pick(level: CheckinBody['level']) {
     if (blocked) return
     setState('sending')
@@ -119,11 +148,29 @@ export function CheckInSheet({ initialSpace, onSubmit, onClose }: {
           </div>
         )}
 
+        <div className="mt-3">
+          <input ref={fileRef} type="file" accept="image/*" capture="environment" tabIndex={-1}
+            aria-hidden="true" className="hidden" onChange={(e) => onPhotoPicked(e.target.files?.[0])} />
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={photo.kind === 'checking'}
+              className={`min-h-11 rounded-lg bg-white/10 px-3 text-sm font-semibold hover:bg-white/20 disabled:opacity-60 ${focus}`}>
+              {photo.kind === 'checking' ? 'Looking at your photo…' : 'Estimate from a photo'}
+            </button>
+            <span className="text-xs text-white/60">Sent to Google Gemini for the estimate, not saved by TrentPulse. Avoid close-ups of people.</span>
+          </div>
+          {photo.kind === 'suggested' && (
+            <p role="status" className="mt-1.5 text-sm text-white/85">
+              Gemini suggests <b>{photo.level}, {LEVELS[photo.level - 1].label}</b>: {photo.reason} Tap it to confirm, or pick another.
+            </p>
+          )}
+          {photo.kind === 'unsure' && <p role="status" className="mt-1.5 text-sm text-amber-200">{photo.text}</p>}
+        </div>
+
         <div className="mt-4 grid grid-cols-5 gap-2" role="group" aria-label="How busy">
           {LEVELS.map((l) => (
             <button key={l.level} disabled={state === 'sending' || blocked} onClick={() => pick(l.level)}
-              aria-label={`${l.level}, ${l.label}`}
-              className={`flex min-h-16 flex-col items-center justify-center rounded-xl text-[11px] font-bold text-black transition hover:scale-105 disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:scale-100 ${focus}`}
+              aria-label={`${l.level}, ${l.label}${suggested === l.level ? ', suggested from your photo' : ''}`}
+              className={`flex min-h-16 flex-col items-center justify-center rounded-xl text-[11px] font-bold text-black transition hover:scale-105 disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:scale-100 ${focus} ${suggested === l.level ? 'ring-4 ring-white ring-offset-2 ring-offset-[#0c120f]' : ''}`}
               style={{ background: l.color }}>
               <span className="font-[Archivo] text-xl">{l.level}</span>{l.label}
             </button>
