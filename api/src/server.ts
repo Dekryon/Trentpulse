@@ -6,7 +6,9 @@ import { pool } from './db.js'
 import { computeScores, getSpaces, nowResponse } from './score.js'
 import { levelOf, type HistoryResponse } from './types.js'
 
-const app = Fastify({ logger: true })
+// trustProxy: on Render every request arrives through its proxy, so read the
+// visitor's address from X-Forwarded-For (used only for the in-memory rate cap).
+const app = Fastify({ logger: true, trustProxy: true })
 await app.register(cors, { origin: (process.env.CORS_ORIGIN ?? 'http://localhost:5173').split(',') })
 
 // GET /api/spaces : the list of places we track
@@ -23,15 +25,48 @@ app.get('/api/forecast', async (req, reply) => {
 })
 
 // POST /api/checkins : a student taps 1..5
-const CheckinBody = z.object({ space_id: z.string().min(1).max(20), level: z.number().int().min(1).max(5) })
+// `device` is a random ID the phone makes once and keeps. It is not tied to a person
+// or a location, and we no longer store IP addresses.
+// One vote per device per building per 15 minutes: tapping again replaces the
+// earlier vote (so a mistake can be fixed) instead of adding a second one.
+const CheckinBody = z.object({
+  space_id: z.string().min(1).max(20),
+  level: z.number().int().min(1).max(5),
+  device: z.string().regex(/^[A-Za-z0-9-]{8,64}$/).optional(),
+})
+const VOTE_WINDOW = '15 minutes'
+
+// Loose per-network cap, kept in memory only (never stored). High on purpose:
+// a whole lecture hall or hackathon room can share one Wi-Fi address.
+const NET_LIMIT = 60, NET_WINDOW_MS = 10 * 60_000
+const netHits = new Map<string, number[]>()
+function tooManyFrom(ip: string) {
+  const now = Date.now()
+  const hits = (netHits.get(ip) ?? []).filter((t) => now - t < NET_WINDOW_MS)
+  hits.push(now)
+  netHits.set(ip, hits)
+  return hits.length > NET_LIMIT
+}
+
 app.post('/api/checkins', async (req, reply) => {
   const body = CheckinBody.safeParse(req.body)
   if (!body.success) return reply.code(400).send({ error: 'Send { space_id, level } with level 1 to 5' })
+  if (tooManyFrom(req.ip)) {
+    return reply.code(429).send({ error: 'Too many check-ins from this network. Try again in a few minutes.' })
+  }
   const exists = (await getSpaces()).some((s) => s.id === body.data.space_id)
   if (!exists) return reply.code(404).send({ error: 'Unknown space_id' })
+  const { space_id, level, device } = body.data
+  let replaced = false
+  if (device) {
+    const old = await pool.query(
+      `DELETE FROM checkins WHERE device = $1 AND space_id = $2 AND time > now() - INTERVAL '${VOTE_WINDOW}'`,
+      [device, space_id])
+    replaced = (old.rowCount ?? 0) > 0
+  }
   await pool.query('INSERT INTO checkins (space_id, level, device) VALUES ($1, $2, $3)',
-    [body.data.space_id, body.data.level, req.ip])
-  return reply.code(201).send({ ok: true })
+    [space_id, level, device ?? null])
+  return reply.code(201).send({ ok: true, replaced })
 })
 
 // GET /api/spaces/:id/history : today vs typical, every 30 min (from the hourly aggregate)

@@ -1,6 +1,7 @@
 // One place the app talks to the back end.
 // If VITE_API_URL is set, call the real API. Otherwise use the built-in mock.
 import * as mock from './mockApi'
+import { deviceId } from './device'
 import type { CheckinBody, HistoryResponse, NowResponse, StatsResponse, SuggestResponse } from './types'
 
 const BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '')
@@ -36,7 +37,8 @@ export async function sendCheckin(body: CheckinBody): Promise<void> {
   const r = await fetch(BASE + '/api/checkins', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...body, device: deviceId() }),
   })
+  if (r.status === 429) throw new Error('Too many check-ins from this network. Try again in a few minutes.')
   if (!r.ok) throw new Error('Check-in failed: ' + r.status)
 }

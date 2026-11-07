@@ -39,6 +39,7 @@ export interface HistoryResponse {
 export interface CheckinBody {
   space_id: string
   level: 1 | 2 | 3 | 4 | 5 // 1 empty .. 5 packed
+  device?: string // optional: random anonymous ID kept on the phone (one vote per building per 15 min)
 }
 
 export interface SuggestResponse {

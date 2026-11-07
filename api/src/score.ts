@@ -38,14 +38,21 @@ export async function computeScores(at: Date): Promise<{ scores: Record<string, 
   const spaces = await getSpaces()
   const { dow, hour, hours } = campusTime(at)
 
-  // live: recent check-ins, newer ones weigh more
+  // live: recent check-ins, newer ones weigh more. Only each device's latest vote
+  // per building counts, so one phone tapping repeatedly is still one voice.
+  // Old rows without a device each count on their own.
   const live = await pool.query<{ space_id: string; live: number; n: number }>(
-    `SELECT space_id,
+    `WITH recent AS (
+       SELECT DISTINCT ON (space_id, coalesce(device, time::text)) space_id, level, time
+       FROM checkins
+       WHERE time > $1::timestamptz - INTERVAL '20 minutes' AND time <= $1::timestamptz
+       ORDER BY space_id, coalesce(device, time::text), time DESC
+     )
+     SELECT space_id,
             sum((level - 1) * 25 * (1 - extract(epoch FROM ($1::timestamptz - time)) / 1200))
               / nullif(sum(1 - extract(epoch FROM ($1::timestamptz - time)) / 1200), 0) AS live,
             count(*)::int AS n
-     FROM checkins
-     WHERE time > $1::timestamptz - INTERVAL '20 minutes' AND time <= $1::timestamptz
+     FROM recent
      GROUP BY space_id`, [at.toISOString()])
 
   // baseline: typical score for this weekday and hour
