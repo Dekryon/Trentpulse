@@ -1,0 +1,26 @@
+# Render blueprint for the TrentPulse API.
+# In Render: New > Blueprint > pick this repo. Render reads this file and
+# only asks for the values marked "sync: false" (the secrets).
+services:
+  - type: web
+    name: trentpulse-api
+    runtime: node
+    plan: free
+    region: ohio            # closest Render region to the Tiger service (us-east-2)
+    rootDir: api
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL     # Tiger connection string, keep ?sslmode=require
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash
+      - key: GEMINI_BACKUP_MODEL
+        value: gemini-3.8-flash
+      - key: CORS_ORIGIN      # the Vercel address(es) of the web app, comma separated
+        value: https://trentpulse.vercel.app,http://localhost:5173
