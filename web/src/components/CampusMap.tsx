@@ -72,11 +72,21 @@ export function CampusMap({ buildings, scores, selectedId, is3D, onSelect }: Pro
 
   const vis = (show: boolean) => ({ visibility: show ? 'visible' : 'none' }) as const
 
+  // The imagery and OpenStreetMap credits must stay reachable, but not cover the app.
+  // Compact mode shows a small "i" button; MapLibre opens it on load, so close it.
+  function collapseCredits() {
+    const el = mapRef.current?.getContainer().querySelector('.maplibregl-ctrl-attrib')
+    el?.classList.remove('maplibregl-compact-show')
+    el?.removeAttribute('open')
+  }
+
   return (
     <Map
       ref={mapRef}
       initialViewState={{ longitude: CAMPUS_CENTER[0], latitude: CAMPUS_CENTER[1], zoom: 16 }}
       mapStyle={satelliteStyle}
+      attributionControl={{ compact: true }}
+      onLoad={collapseCredits}
       maxPitch={70}
       interactiveLayerIds={['bld-fill', 'bld-3d']}
       onClick={(e) => onSelect((e.features?.[0]?.properties?.id as string | undefined) ?? null)}

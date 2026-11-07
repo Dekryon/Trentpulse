@@ -1,6 +1,6 @@
 // The busyness score (plan section 05):
 //   score = 0.5 * live + 0.3 * baseline + 0.2 * lecture_boost
-// With fewer than 3 recent check-ins, live's weight moves to the baseline.
+// With fewer than 3 recent check-ins, live's weight ramps up per check-in.
 import { pool } from './db.js'
 import { levelOf, type NowResponse } from './types.js'
 
@@ -82,9 +82,11 @@ export async function computeScores(at: Date): Promise<{ scores: Record<string, 
     const b = Number(base.rows.find((r) => r.space_id === s.id)?.typical ?? 0)
     const k = Math.min(100, boost[s.id])
     reports[s.id] = l?.n ?? 0
-    const score = l && l.n >= 3
-      ? 0.5 * Number(l.live) + 0.3 * b + 0.2 * k
-      : 0.8 * b + 0.2 * k
+    // Trust check-ins more as they add up: 1 report gets a third of live's 0.5
+    // weight, 2 get two thirds, 3 or more get all of it. The rest of that weight
+    // stays on the baseline. With 0 or 3+ reports this is the original formula.
+    const wLive = 0.5 * Math.min(l?.n ?? 0, 3) / 3
+    const score = wLive * Number(l?.live ?? 0) + (0.8 - wLive) * b + 0.2 * k
     scores[s.id] = Math.max(0, Math.min(100, Math.round(score)))
   }
   return { scores, reports, events }

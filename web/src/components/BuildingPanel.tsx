@@ -6,10 +6,11 @@ import { SPACE_BY_ID } from '../lib/spaces'
 import type { SpaceNow } from '../lib/types'
 
 // The dark glass detail card (Landtrack style)
-export function BuildingPanel({ space, at, events, onClose, onCheckin }: {
+export function BuildingPanel({ space, at, events, compact = false, onClose, onCheckin }: {
   space: SpaceNow
   at?: Date
   events: string[]
+  compact?: boolean // phone: skip the chart, it is too small to read there
   onClose: () => void
   onCheckin: () => void
 }) {
@@ -29,13 +30,16 @@ export function BuildingPanel({ space, at, events, onClose, onCheckin }: {
   const relevant = events.filter((e) => e.includes(def.name) || e.toLowerCase().includes('let out'))
 
   return (
-    <div className="glass pointer-events-auto w-full rounded-2xl p-4 shadow-2xl sm:w-[340px]">
+    <section aria-label={`${def.name} details`} className="glass glass-solid pointer-events-auto w-full rounded-2xl p-4 shadow-2xl sm:w-[340px]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-[11px] uppercase tracking-wide text-white/55">{def.bank === 'west' ? 'West Bank' : 'East Bank'}</div>
+          <div className="text-[11px] uppercase tracking-wide text-white/60">{def.bank === 'west' ? 'West Bank' : 'East Bank'}</div>
           <h2 className="font-[Archivo] text-xl font-extrabold leading-tight">{def.name}</h2>
         </div>
-        <button onClick={onClose} className="rounded-lg px-2 py-1 text-white/60 hover:bg-white/10 hover:text-white" aria-label="Close panel">✕</button>
+        <button onClick={onClose} aria-label={`Close ${def.name} details`}
+          className="-mr-1 -mt-1 grid h-10 w-10 shrink-0 place-items-center rounded-lg text-lg text-white/70 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-white">
+          ✕
+        </button>
       </div>
 
       <div className="mt-3 flex items-baseline gap-2">
@@ -58,28 +62,35 @@ export function BuildingPanel({ space, at, events, onClose, onCheckin }: {
         </div>
       )}
 
-      <div className="mt-4 text-xs text-white/60">Today vs a typical day</div>
-      <div className="mt-1 h-32">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={rows} margin={{ top: 4, right: 4, bottom: 0, left: -24 }}>
-            <XAxis dataKey="time" tick={{ fill: 'rgba(255,255,255,.45)', fontSize: 10 }} interval={5} axisLine={false} tickLine={false} />
-            <YAxis domain={[0, 100]} tick={{ fill: 'rgba(255,255,255,.45)', fontSize: 10 }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ background: '#0c120f', border: '1px solid rgba(255,255,255,.15)', borderRadius: 8, fontSize: 12 }} />
-            <Line type="monotone" dataKey="typical" stroke="rgba(255,255,255,.4)" strokeDasharray="4 4" dot={false} strokeWidth={1.5} />
-            <Line type="monotone" dataKey="today" stroke="#e0a526" dot={false} strokeWidth={2.5} connectNulls={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+      {!compact && (
+        <>
+          <div className="mt-4 text-xs text-white/60">Today vs a typical day</div>
+          <div className="mt-1 h-32">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={rows} margin={{ top: 4, right: 4, bottom: 0, left: -24 }}>
+                <XAxis dataKey="time" tick={{ fill: 'rgba(255,255,255,.5)', fontSize: 10 }} interval={5} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, 100]} tick={{ fill: 'rgba(255,255,255,.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: '#0c120f', border: '1px solid rgba(255,255,255,.15)', borderRadius: 8, fontSize: 12 }} />
+                <Line type="monotone" dataKey="typical" stroke="rgba(255,255,255,.4)" strokeDasharray="4 4" dot={false} strokeWidth={1.5} />
+                <Line type="monotone" dataKey="today" stroke="#e0a526" dot={false} strokeWidth={2.5} connectNulls={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </>
+      )}
 
       <div className="mt-3 rounded-lg bg-white/[0.06] px-3 py-2 text-sm">
         <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-gold">Tip</span>
         {suggest.isLoading ? 'Thinking…' : suggest.data?.text}
       </div>
 
-      <button onClick={onCheckin} className="mt-3 w-full rounded-xl bg-trent py-2.5 font-semibold text-white hover:brightness-110">
+      <button onClick={onCheckin}
+        className="mt-3 min-h-11 w-full rounded-xl bg-trent py-2.5 font-semibold text-white hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
         I'm here: check in
       </button>
-      <div className="mt-1 text-center text-[11px] text-white/45">{space.reports_20m} check-ins in the last 20 min</div>
-    </div>
+      <div className="mt-1.5 text-center text-xs text-white/60">
+        {space.reports_20m === 1 ? '1 check-in' : `${space.reports_20m} check-ins`} in the last 20 min
+      </div>
+    </section>
   )
 }

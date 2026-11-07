@@ -21,5 +21,12 @@ body { background: #0f1512; color: #e6ece8; font-family: var(--font-sans); }
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
+/* Panels full of text (building details, check-in) need a near-solid background
+   so map labels underneath don't show through. */
+.glass-solid { background: rgba(12, 18, 15, 0.96); }
 
-.maplibregl-ctrl-attrib { font-size: 10px; }
+/* Keep the map's bottom controls (the credits "i" button) above our bottom bar.
+   App.tsx measures that bar and sets --bottom-ui. */
+.maplibregl-ctrl-bottom-right,
+.maplibregl-ctrl-bottom-left { bottom: var(--bottom-ui, 0px); }
+.maplibregl-ctrl-attrib { font-size: 11px; }
