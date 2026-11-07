@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { SPACES } from '../lib/spaces'
+import { OFF_CAMPUS_METERS, TRUSTED_ACCURACY_METERS, formatDistance, nearestSpace } from '../lib/nearby'
 import type { CheckinBody } from '../lib/types'
+
+// Optional location step. Only runs when the student taps "Use my location".
+type Locate =
+  | { kind: 'idle' }
+  | { kind: 'locating' }
+  | { kind: 'near'; text: string }
+  | { kind: 'away'; text: string }   // clearly off campus: sending is paused
+  | { kind: 'error'; text: string }
+const CAN_LOCATE = typeof navigator !== 'undefined' && 'geolocation' in navigator
 
 const LEVELS: { level: CheckinBody['level']; label: string; color: string }[] = [
   { level: 1, label: 'Empty', color: '#2f9e6a' },
@@ -35,10 +45,45 @@ export function CheckInSheet({ initialSpace, onSubmit, onClose }: {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  const [locate, setLocate] = useState<Locate>({ kind: 'idle' })
+  const [errorText, setErrorText] = useState('Could not send. Check your connection and try again.')
+
+  // Use the phone's position to pick the nearest building. The coordinates stay
+  // in this function; only the chosen building is ever sent.
+  function locateMe() {
+    setLocate({ kind: 'locating' })
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { longitude, latitude, accuracy } = pos.coords
+        const near = nearestSpace(longitude, latitude)
+        const trusted = accuracy <= TRUSTED_ACCURACY_METERS
+        if (trusted && near.distance > OFF_CAMPUS_METERS) {
+          setLocate({ kind: 'away', text: `You seem to be about ${formatDistance(near.distance)} from campus. Check-ins are for people on site.` })
+          return
+        }
+        setSpace(near.id)
+        setLocate({ kind: 'near', text: trusted
+          ? `Nearest building: ${near.name}. Change it below if that's wrong.`
+          : `Location is rough, so we guessed ${near.name}. Change it below if that's wrong.` })
+      },
+      (err) => setLocate({ kind: 'error', text: err.code === err.PERMISSION_DENIED
+        ? 'Location is off. Pick your building from the list instead.'
+        : "Couldn't get your location. Pick your building from the list instead." }),
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
+    )
+  }
+
+  const blocked = locate.kind === 'away'
+
   async function pick(level: CheckinBody['level']) {
+    if (blocked) return
     setState('sending')
     try { await onSubmit({ space_id: space, level }); setState('done'); setTimeout(onClose, 900) }
-    catch { setState('error') }
+    catch (e) {
+      setErrorText(e instanceof Error && e.message.startsWith('Too many')
+        ? e.message : 'Could not send. Check your connection and try again.')
+      setState('error')
+    }
   }
 
   return (
@@ -58,9 +103,25 @@ export function CheckInSheet({ initialSpace, onSubmit, onClose }: {
           className={`mt-1 min-h-11 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-white ${focus}`}>
           {SPACES.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
+
+        {CAN_LOCATE && (
+          <div className="mt-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <button type="button" onClick={locateMe} disabled={locate.kind === 'locating'}
+                className={`min-h-11 rounded-lg bg-white/10 px-3 text-sm font-semibold hover:bg-white/20 disabled:opacity-60 ${focus}`}>
+                {locate.kind === 'locating' ? 'Finding you…' : locate.kind === 'away' ? 'Try again' : 'Use my location'}
+              </button>
+              <span className="text-xs text-white/60">Only used on this phone to pick the nearest building. Never sent or stored.</span>
+            </div>
+            {'text' in locate && (
+              <p role="status" className={`mt-1.5 text-sm ${locate.kind === 'away' ? 'text-amber-200' : 'text-white/80'}`}>{locate.text}</p>
+            )}
+          </div>
+        )}
+
         <div className="mt-4 grid grid-cols-5 gap-2" role="group" aria-label="How busy">
           {LEVELS.map((l) => (
-            <button key={l.level} disabled={state === 'sending'} onClick={() => pick(l.level)}
+            <button key={l.level} disabled={state === 'sending' || blocked} onClick={() => pick(l.level)}
               aria-label={`${l.level}, ${l.label}`}
               className={`flex min-h-16 flex-col items-center justify-center rounded-xl text-[11px] font-bold text-black transition hover:scale-105 disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:scale-100 ${focus}`}
               style={{ background: l.color }}>
@@ -71,7 +132,7 @@ export function CheckInSheet({ initialSpace, onSubmit, onClose }: {
         <p className="mt-3 min-h-5 text-center text-sm text-white/75" role="status">
           {state === 'sending' && 'Sending…'}
           {state === 'done' && 'Thanks. The map updates within 15 seconds.'}
-          {state === 'error' && 'Could not send. Check your connection and try again.'}
+          {state === 'error' && errorText}
         </p>
       </div>
     </div>
