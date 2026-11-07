@@ -73,11 +73,18 @@ export function CampusMap({ buildings, scores, selectedId, is3D, onSelect }: Pro
   const vis = (show: boolean) => ({ visibility: show ? 'visible' : 'none' }) as const
 
   // The imagery and OpenStreetMap credits must stay reachable, but not cover the app.
-  // Compact mode shows a small "i" button; MapLibre opens it on load, so close it.
+  // Compact mode shows a small "i" button. MapLibre expands it (class
+  // maplibregl-compact-show) once the credit text arrives, which can be after the
+  // first render. So on each "idle", wait until that class exists, remove it once
+  // (exactly what MapLibre itself does when you drag the map), then stop, so a
+  // viewer who taps "i" later keeps it open.
+  const creditsCollapsed = useRef(false)
   function collapseCredits() {
-    const el = mapRef.current?.getContainer().querySelector('.maplibregl-ctrl-attrib')
-    el?.classList.remove('maplibregl-compact-show')
-    el?.removeAttribute('open')
+    if (creditsCollapsed.current) return
+    const el = mapRef.current?.getContainer().querySelector('.maplibregl-ctrl-attrib.maplibregl-compact')
+    if (!el) return
+    el.classList.remove('maplibregl-compact-show')
+    creditsCollapsed.current = true
   }
 
   return (
@@ -86,7 +93,8 @@ export function CampusMap({ buildings, scores, selectedId, is3D, onSelect }: Pro
       initialViewState={{ longitude: CAMPUS_CENTER[0], latitude: CAMPUS_CENTER[1], zoom: 16 }}
       mapStyle={satelliteStyle}
       attributionControl={{ compact: true }}
-      onLoad={collapseCredits}
+      onSourceData={collapseCredits}
+      onIdle={collapseCredits}
       maxPitch={70}
       interactiveLayerIds={['bld-fill', 'bld-3d']}
       onClick={(e) => onSelect((e.features?.[0]?.properties?.id as string | undefined) ?? null)}
