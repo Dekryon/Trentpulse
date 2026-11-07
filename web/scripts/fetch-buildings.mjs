@@ -23,11 +23,23 @@ const query = `[out:json][timeout:25];
 );
 out geom;`
 
-const res = await fetch('https://overpass-api.de/api/interpreter', {
-  method: 'POST',
-  body: 'data=' + encodeURIComponent(query),
-  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-})
+// Overpass rejects requests without a User-Agent and Accept header (HTTP 406),
+// so we send both, and fall back to a second server if the first one fails.
+const SERVERS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter']
+let res
+for (const url of SERVERS) {
+  res = await fetch(url, {
+    method: 'POST',
+    body: 'data=' + encodeURIComponent(query),
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+      'User-Agent': 'TrentPulse-hackathon/0.1 (HackTrent 2026)',
+    },
+  })
+  if (res.ok) break
+  console.warn(`Overpass ${url} returned ${res.status}, trying next server`)
+}
 if (!res.ok) throw new Error('Overpass error ' + res.status)
 const { elements } = await res.json()
 
