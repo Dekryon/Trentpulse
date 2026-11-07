@@ -6,6 +6,7 @@ import { BuildingPanel } from './components/BuildingPanel'
 import { TimeBar } from './components/TimeBar'
 import { CheckInSheet } from './components/CheckInSheet'
 import { SpaceList } from './components/SpaceList'
+import { AskPanel } from './components/AskPanel'
 import { USING_MOCK, fetchNow, fetchStats, sendCheckin } from './lib/api'
 import { loadBuildings } from './lib/geo'
 import { checkinsToday } from './lib/mockApi'
@@ -55,14 +56,16 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     window.matchMedia(SMALL_QUERY).matches ? null : 'bata')
   const [checkinOpen, setCheckinOpen] = useState(false)
-  const [listOpen, setListOpen] = useState(false)
+  // The side panel: the list of all spaces, or Ask TrentPulse (one at a time)
+  const [side, setSide] = useState<'list' | 'ask' | null>(null)
+  const toggleSide = (which: 'list' | 'ask') => setSide((v) => (v === which ? null : which))
   const [localCheckins, setLocalCheckins] = useState(0)
 
-  // Picking a space from the list opens its details. On a phone the list and the
-  // details share the bottom area, so the list steps aside.
+  // Picking a space from the list opens its details. On a phone the side panel and
+  // the details share the bottom area, so the list steps aside.
   function pickFromList(id: string) {
     setSelectedId(id)
-    if (isSmall) setListOpen(false)
+    if (isSmall) setSide(null)
   }
 
   // Measure the bottom stack so the map's own bottom controls sit just above it
@@ -138,6 +141,12 @@ export default function App() {
     />
   )
 
+  const sidePanel = side === 'ask'
+    ? <AskPanel onClose={() => setSide(null)} />
+    : side === 'list' && now.data
+      ? <SpaceList spaces={now.data.spaces} selectedId={selectedId} onSelect={pickFromList} onClose={() => setSide(null)} />
+      : null
+
   return (
     <div ref={rootRef} className="relative h-full w-full overflow-hidden">
       {buildings.data ? (
@@ -152,10 +161,12 @@ export default function App() {
           <h1 className="glass pointer-events-auto m-0 rounded-xl px-3 py-2 font-[Archivo] text-lg font-extrabold">
             Trent<span className="text-gold">Pulse</span>
           </h1>
-          <button onClick={() => setListOpen((v) => !v)} aria-pressed={listOpen}
-            className={`glass pointer-events-auto min-h-11 rounded-xl px-3.5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${listOpen ? 'bg-white/20 text-white' : 'text-white/85 hover:bg-white/10'}`}>
-            {listOpen ? 'Hide list' : 'List'}
-          </button>
+          {(['list', 'ask'] as const).map((which) => (
+            <button key={which} onClick={() => toggleSide(which)} aria-pressed={side === which}
+              className={`glass pointer-events-auto min-h-11 rounded-xl px-3.5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${side === which ? 'bg-white/20 text-white' : 'text-white/85 hover:bg-white/10'}`}>
+              {which === 'list' ? 'List' : 'Ask'}
+            </button>
+          ))}
           {USING_MOCK && (
             <span className="glass rounded-full px-2.5 py-1 text-[11px] text-white/70" title="Set VITE_API_URL to use the real API">
               Demo data
@@ -170,10 +181,10 @@ export default function App() {
         />
       </div>
 
-      {/* Desktop: list of all spaces on the left */}
-      {!isSmall && listOpen && now.data && (
+      {/* Desktop: side panel (list or Ask) on the left */}
+      {!isSmall && sidePanel && (
         <div className="pointer-events-none absolute left-4 top-36 flex max-h-[calc(100%-16rem)] overflow-y-auto">
-          <SpaceList spaces={now.data.spaces} selectedId={selectedId} onSelect={pickFromList} onClose={() => setListOpen(false)} />
+          {sidePanel}
         </div>
       )}
 
@@ -186,15 +197,13 @@ export default function App() {
 
       {/* Bottom stack: (phone) building panel, check-in button, time bar */}
       <div ref={bottomRef} className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 p-3 sm:p-4">
-        {isSmall && listOpen && now.data && (
-          <div className="pointer-events-none flex max-h-[55vh] overflow-y-auto rounded-2xl">
-            <SpaceList spaces={now.data.spaces} selectedId={selectedId} onSelect={pickFromList} onClose={() => setListOpen(false)} />
-          </div>
+        {isSmall && sidePanel && (
+          <div className="pointer-events-none flex max-h-[55vh] overflow-y-auto rounded-2xl">{sidePanel}</div>
         )}
-        {isSmall && !listOpen && panel && (
+        {isSmall && !side && panel && (
           <div className="pointer-events-none flex max-h-[52vh] overflow-y-auto rounded-2xl">{panel}</div>
         )}
-        {!selected && !(isSmall && listOpen) && (
+        {!selected && !(isSmall && side) && (
           <button onClick={() => setCheckinOpen(true)}
             className="pointer-events-auto min-h-11 self-end rounded-full bg-trent px-5 py-3 font-semibold text-white shadow-xl hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
             + Check in

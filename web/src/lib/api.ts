@@ -26,6 +26,19 @@ export function fetchSuggest(near: string, at?: Date): Promise<SuggestResponse> 
   return BASE ? get(`/api/suggest?near=${near}`) : mock.getSuggest(near, at)
 }
 
+// Ask TrentPulse: a free-text question answered from live data
+export async function askQuestion(question: string): Promise<{ text: string; source: 'gemini' | 'data' }> {
+  if (!BASE) return { text: 'Ask TrentPulse needs the live API. In demo mode, use the map and the list.', source: 'data' }
+  const r = await fetch(BASE + '/api/ask', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question }),
+  })
+  if (r.status === 429) throw new Error('Lots of questions right now. Try again in a few minutes.')
+  if (!r.ok) throw new Error('Could not get an answer. Try again.')
+  return r.json()
+}
+
 // Tiger Data numbers (rows, compression, query time). Demo mode has no database,
 // so it returns null and the tile stays hidden rather than showing made-up figures.
 export function fetchStats(): Promise<StatsResponse | null> {
