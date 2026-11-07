@@ -5,11 +5,17 @@ import { pool } from './db.js'
 import { levelOf, type NowResponse } from './types.js'
 
 type SpaceRow = { id: string; name: string; type: string; lng: number; lat: number }
-let spacesCache: SpaceRow[] | null = null
+// Spaces rarely change, so keep them in memory, but re-read every 5 minutes so an
+// edit in the database (new building, corrected position) shows up without a restart.
+const SPACES_TTL_MS = 5 * 60_000
+let spacesCache: { rows: SpaceRow[]; at: number } | null = null
 
 export async function getSpaces(): Promise<SpaceRow[]> {
-  if (!spacesCache) spacesCache = (await pool.query<SpaceRow>('SELECT id, name, bank, type, lng, lat FROM spaces ORDER BY id')).rows
-  return spacesCache
+  if (!spacesCache || Date.now() - spacesCache.at > SPACES_TTL_MS) {
+    const rows = (await pool.query<SpaceRow>('SELECT id, name, bank, type, lng, lat FROM spaces ORDER BY id')).rows
+    spacesCache = { rows, at: Date.now() }
+  }
+  return spacesCache.rows
 }
 
 function meters(a: SpaceRow, b: SpaceRow) {

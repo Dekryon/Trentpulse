@@ -69,17 +69,17 @@ SELECT add_continuous_aggregate_policy('busyness_1h',
 ALTER TABLE samples SET (timescaledb.compress, timescaledb.compress_segmentby = 'space_id');
 SELECT add_compression_policy('samples', INTERVAL '7 days', if_not_exists => TRUE);
 
--- Spaces (approximate centres; fine for walking-distance maths)
+-- Spaces: centres of the OpenStreetMap outlines (area-weighted), used for walking distances
 INSERT INTO spaces (id, name, bank, type, lng, lat) VALUES
-  ('bata', 'Bata Library',       'west', 'study',   -78.2915, 44.3575),
-  ('sc',   'Student Centre',     'west', 'social',  -78.2930, 44.3590),
-  ('ath',  'Athletics Centre',   'west', 'gym',     -78.2945, 44.3610),
-  ('cc',   'Champlain College',  'west', 'college', -78.2918, 44.3560),
-  ('lec',  'Lady Eaton College', 'west', 'college', -78.2960, 44.3535),
-  ('sci',  'Science Complex',    'east', 'lecture', -78.2880, 44.3578),
-  ('dna',  'DNA Building',       'east', 'lecture', -78.2875, 44.3600),
-  ('gz',   'Gzowski College',    'east', 'lecture', -78.2872, 44.3555),
-  ('oc',   'Otonabee College',   'east', 'college', -78.2840, 44.3605)
+  ('bata', 'Bata Library',       'west', 'study',   -78.29043, 44.35723),
+  ('sc',   'Student Centre',     'west', 'social',  -78.29110, 44.35670),
+  ('ath',  'Athletics Centre',   'west', 'gym',     -78.29250, 44.35546),
+  ('cc',   'Champlain College',  'west', 'college', -78.29070, 44.35896),
+  ('lec',  'Lady Eaton College', 'west', 'college', -78.29221, 44.35821),
+  ('sci',  'Science Complex',    'east', 'lecture', -78.28831, 44.35871),
+  ('dna',  'DNA Building',       'east', 'lecture', -78.28495, 44.35903),
+  ('gz',   'Gzowski College',    'east', 'lecture', -78.28752, 44.35745),
+  ('oc',   'Otonabee College',   'east', 'college', -78.28629, 44.35798)
 ON CONFLICT (id) DO NOTHING;
 
 -- EXAMPLE lectures. Replace with ~30 real big sections from myTrent.
