@@ -59,11 +59,11 @@ for (let t = start.getTime(); t < end.getTime(); t += 60_000) {
 await flush()
 console.log(`\nInserted ${total.toLocaleString()} samples.`)
 
-// Some fake check-ins from the last 2 hours so "live" has data
-await pool.query(`
-  INSERT INTO checkins (time, space_id, level, device)
-  SELECT now() - (random() * INTERVAL '2 hours'), s.id, 1 + floor(random() * 5)::int, 'seed'
-  FROM spaces s, generate_series(1, 15)`)
+// Fake check-ins are no longer seeded: the app is live and real check-ins come
+// from phones. Remove any left over from earlier seed runs (tagged device = 'seed')
+// so a live demo tap counts fully. Real check-ins are never touched.
+const cleared = await pool.query(`DELETE FROM checkins WHERE device = 'seed'`)
+console.log(`Removed ${cleared.rowCount} old fake check-ins.`)
 
 console.log('Refreshing aggregates (busyness_1h, busyness_5m)...')
 await pool.query(`CALL refresh_continuous_aggregate('busyness_1h', NULL, NULL)`)
@@ -71,6 +71,10 @@ await pool.query(`CALL refresh_continuous_aggregate('busyness_5m', NULL, NULL)`)
 
 console.log('Compressing chunks older than 7 days...')
 await pool.query(`SELECT compress_chunk(c, if_not_compressed => true) FROM show_chunks('samples', older_than => INTERVAL '7 days') c`)
+
+// Refresh table statistics so /api/stats (approximate_row_count) reports the
+// real row total; without this it reads stale numbers after compression.
+await pool.query('ANALYZE samples')
 
 const stats = await pool.query(`SELECT * FROM hypertable_compression_stats('samples')`)
 const r = stats.rows[0]
