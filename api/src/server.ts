@@ -59,6 +59,8 @@ app.get<{ Params: { id: string } }>('/api/spaces/:id/history', async (req): Prom
 
 // GET /api/suggest?near=bata : a short tip, written by Gemini if a key is set
 const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null
+const TIP_TTL_MS = 3 * 60_000
+const tipCache = new Map<string, { text: string; at: number }>()
 app.get('/api/suggest', async (req, reply) => {
   const near = String((req.query as { near?: string }).near ?? '')
   const spaces = await getSpaces()
@@ -76,20 +78,39 @@ app.get('/api/suggest', async (req, reply) => {
       : `${here.name} is ${lv}. Good time to go.`
   }
   if (!ai) return { text: fallback() }
-  try {
-    const res = await ai.models.generateContent({
-      model: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
-      contents: `You help Trent University students find a place to study or hang out.
+  // The free Gemini tier allows about 5 requests a minute, so reuse a tip for the same
+  // building at the same busyness level for 3 minutes instead of asking again.
+  const cacheKey = `${near}:${levelOf(scores[near])}`
+  const cached = tipCache.get(cacheKey)
+  if (cached && Date.now() - cached.at < TIP_TTL_MS) return { text: cached.text }
+  const prompt = `You help Trent University students find a place to study or hang out.
 Current busyness on Symons Campus:
 ${list}
 The student is looking at ${here.name}. In one short sentence (max 20 words), say how busy it is and,
-if it is busy or packed, suggest the best quieter alternative. Friendly, no emojis.`,
-    })
-    return { text: res.text?.trim() || fallback() }
-  } catch (err) {
-    req.log.warn(err, 'Gemini failed, using fallback')
-    return { text: fallback() }
+if it is busy or packed, suggest the best quieter alternative. Friendly, no emojis.`
+  // Try the main model, then a backup model, each capped at 5 seconds, so a busy or slow
+  // Gemini never leaves the tip box stuck. If both fail we use the rule-based tip.
+  const models = [
+    process.env.GEMINI_MODEL ?? 'gemini-3.5-flash',
+    process.env.GEMINI_BACKUP_MODEL ?? 'gemini-3.8-flash',
+  ]
+  for (const model of models) {
+    try {
+      const res = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: { abortSignal: AbortSignal.timeout(5000) },
+      })
+      const text = res.text?.trim()
+      if (text) {
+        tipCache.set(cacheKey, { text, at: Date.now() })
+        return { text }
+      }
+    } catch (err) {
+      req.log.warn({ model, err: (err as Error).message }, 'Gemini failed, trying next option')
+    }
   }
+  return { text: fallback() }
 })
 
 // GET /api/stats : numbers for the pitch (rows, compression, query speed)

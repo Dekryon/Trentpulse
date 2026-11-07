@@ -26,13 +26,12 @@ The map is a satellite view of campus. Buildings are coloured green to red by bu
 
 ## Team
 
+As of Sat Nov 7 evening, Greg and Claude build the whole repo together (`web/`, `api/`, `db/`). The two back-end teammates work in their own setups and don't push here.
+
 | Person | Role | Owns |
 |---|---|---|
-| Greg (me) | Front end lead | `web/`, demo video, Devpost write-up |
-| Back end 1 | Data | Tiger Data service, `db/schema.sql`, `api/scripts/seed.ts`, benchmarks |
-| Back end 2 | API | `api/src/`, score function, `lectures`, Gemini, deploy |
-
-To avoid merge conflicts, each person mostly edits only their own folders.
+| Greg (me) | Lead | Decisions and approvals, accounts and keys, real lectures from myTrent, phone testing, demo video, Devpost write-up |
+| Claude | Code | Everything in `web/`, `api/`, `db/`, deploys, README and technical docs |
 
 ## Repo layout
 
