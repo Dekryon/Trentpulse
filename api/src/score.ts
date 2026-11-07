@@ -92,11 +92,25 @@ export async function computeScores(at: Date): Promise<{ scores: Record<string, 
   return { scores, reports, events }
 }
 
+// Real check-ins from campus midnight up to `at`. The seed script's fake
+// check-ins (device = 'seed') are left out so the number means real people.
+async function checkinsToday(at: Date): Promise<number> {
+  const r = await pool.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM checkins
+     WHERE time >= (date_trunc('day', $1::timestamptz AT TIME ZONE 'America/Toronto') AT TIME ZONE 'America/Toronto')
+       AND time <= $1::timestamptz
+       AND device IS DISTINCT FROM 'seed'`, [at.toISOString()])
+  return r.rows[0]?.n ?? 0
+}
+
 export async function nowResponse(at: Date): Promise<NowResponse> {
-  const [cur, prev] = await Promise.all([computeScores(at), computeScores(new Date(at.getTime() - 15 * 60_000))])
+  const [cur, prev, today] = await Promise.all([
+    computeScores(at), computeScores(new Date(at.getTime() - 15 * 60_000)), checkinsToday(at),
+  ])
   const spaces = await getSpaces()
   return {
     updated_at: at.toISOString(),
+    checkins_today: today,
     events: cur.events,
     spaces: spaces.map((s) => {
       const score = cur.scores[s.id], before = prev.scores[s.id]

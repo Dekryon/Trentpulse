@@ -5,7 +5,7 @@ import { TopTiles } from './components/TopTiles'
 import { BuildingPanel } from './components/BuildingPanel'
 import { TimeBar } from './components/TimeBar'
 import { CheckInSheet } from './components/CheckInSheet'
-import { USING_MOCK, fetchNow, sendCheckin } from './lib/api'
+import { USING_MOCK, fetchNow, fetchStats, sendCheckin } from './lib/api'
 import { loadBuildings } from './lib/geo'
 import { checkinsToday } from './lib/mockApi'
 import type { CheckinBody } from './lib/types'
@@ -79,6 +79,9 @@ export default function App() {
     placeholderData: (prev) => prev,
   })
 
+  // Tiger Data numbers for the stats tile; they change slowly, so once a minute
+  const stats = useQuery({ queryKey: ['stats'], queryFn: fetchStats, refetchInterval: 60_000 })
+
   // Keep the clock moving in live mode
   useEffect(() => {
     if (!live) return
@@ -146,7 +149,12 @@ export default function App() {
             </span>
           )}
         </div>
-        <TopTiles now={now.data} checkins={(USING_MOCK ? 180 + checkinsToday() : 0) || localCheckins} timeLabel={timeLabel} />
+        <TopTiles
+          now={now.data}
+          stats={stats.data ?? null}
+          checkins={USING_MOCK ? 180 + checkinsToday() : (now.data?.checkins_today ?? localCheckins)}
+          timeLabel={timeLabel}
+        />
       </div>
 
       {/* Desktop: building panel top right */}

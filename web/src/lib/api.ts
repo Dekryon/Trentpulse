@@ -1,7 +1,7 @@
 // One place the app talks to the back end.
 // If VITE_API_URL is set, call the real API. Otherwise use the built-in mock.
 import * as mock from './mockApi'
-import type { CheckinBody, HistoryResponse, NowResponse, SuggestResponse } from './types'
+import type { CheckinBody, HistoryResponse, NowResponse, StatsResponse, SuggestResponse } from './types'
 
 const BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '')
 export const USING_MOCK = !BASE
@@ -23,6 +23,12 @@ export function fetchHistory(id: string): Promise<HistoryResponse> {
 
 export function fetchSuggest(near: string, at?: Date): Promise<SuggestResponse> {
   return BASE ? get(`/api/suggest?near=${near}`) : mock.getSuggest(near, at)
+}
+
+// Tiger Data numbers (rows, compression, query time). Demo mode has no database,
+// so it returns null and the tile stays hidden rather than showing made-up figures.
+export function fetchStats(): Promise<StatsResponse | null> {
+  return BASE ? get('/api/stats') : Promise.resolve(null)
 }
 
 export async function sendCheckin(body: CheckinBody): Promise<void> {

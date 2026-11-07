@@ -23,6 +23,7 @@ export interface NowResponse {
   updated_at: string
   spaces: SpaceNow[]
   events?: string[] // optional: "Lecture let out 5 min ago at Science Complex"
+  checkins_today?: number // optional: real check-ins since campus midnight (seed rows excluded)
 }
 
 export interface HistoryPoint {
@@ -42,6 +43,13 @@ export interface CheckinBody {
 
 export interface SuggestResponse {
   text: string
+}
+
+// GET /api/stats: Tiger Data numbers for the pitch
+export interface StatsResponse {
+  rows_total: number
+  compression_ratio: number
+  score_query_ms: number
 }
 
 export function levelOf(score: number): Level {

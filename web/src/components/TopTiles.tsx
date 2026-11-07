@@ -1,6 +1,6 @@
 import { SPACE_BY_ID } from '../lib/spaces'
 import { LEVEL_LABEL, heatColor } from '../lib/colors'
-import type { NowResponse } from '../lib/types'
+import type { NowResponse, StatsResponse } from '../lib/types'
 
 // The number tiles across the top (Analytics-dashboard style).
 // On a phone they sit in one swipeable row and never wrap, and the "Showing"
@@ -20,7 +20,9 @@ function Tile({ label, value, sub, dot, className = '' }: {
   )
 }
 
-export function TopTiles({ now, checkins, timeLabel }: { now?: NowResponse; checkins: number; timeLabel: string }) {
+export function TopTiles({ now, stats, checkins, timeLabel }: {
+  now?: NowResponse; stats: StatsResponse | null; checkins: number; timeLabel: string
+}) {
   const places = (now?.spaces ?? []).filter((s) => SPACE_BY_ID[s.id]?.type !== 'lecture')
   const quietest = [...places].sort((a, b) => a.score - b.score)[0]
   const busiest = [...places].sort((a, b) => b.score - a.score)[0]
@@ -31,6 +33,13 @@ export function TopTiles({ now, checkins, timeLabel }: { now?: NowResponse; chec
       {quietest && <Tile label="Quietest now" value={SPACE_BY_ID[quietest.id].name} sub={`${LEVEL_LABEL[quietest.level]} · ${quietest.score}`} dot={heatColor(quietest.score)} />}
       {busiest && <Tile label="Busiest" value={SPACE_BY_ID[busiest.id].name} sub={`${LEVEL_LABEL[busiest.level]} · ${busiest.score}`} dot={heatColor(busiest.score)} />}
       <Tile label="Check-ins today" value={String(checkins)} />
+      {stats && (
+        <Tile
+          label="Tiger Data"
+          value={`${stats.rows_total.toLocaleString('en-CA')} rows`}
+          sub={`${stats.compression_ratio}× compressed · ${stats.score_query_ms} ms query`}
+        />
+      )}
     </div>
   )
 }
