@@ -54,14 +54,22 @@ export default function App() {
   const [playing, setPlaying] = useState(false)
   const [is3D, setIs3D] = useState(false)
   const [foodMode, setFoodMode] = useState(false)
-  // On a phone, open on the map itself; the panel would cover it.
-  const [selectedId, setSelectedId] = useState<string | null>(() =>
-    window.matchMedia(SMALL_QUERY).matches ? null : 'bata')
+  // Open on the whole map; a building's details open when you pick one
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [checkinOpen, setCheckinOpen] = useState(false)
   // The side panel: the list of all spaces, or Ask TrentPulse (one at a time)
+  // One thing open at a time keeps the map clear: a side panel (list or events),
+  // a building's details, or the Ask chat. Opening one closes the others.
   type Side = 'list' | 'ask' | 'events'
   const [side, setSide] = useState<Side | null>(null)
-  const toggleSide = (which: Side) => setSide((v) => (v === which ? null : which))
+  const toggleSide = (which: Side) => {
+    setSide((v) => (v === which ? null : which))
+    if (side !== which) setSelectedId(null)
+  }
+  function selectBuilding(id: string | null) {
+    setSelectedId(id)
+    if (id) setSide(null)
+  }
 
   // When a panel closes, put keyboard focus back on the button that opened it,
   // so keyboard and screen reader users don't land back at the top of the page.
@@ -85,8 +93,7 @@ export default function App() {
   // Picking a space from the list opens its details. On a phone the side panel and
   // the details share the bottom area, so the list steps aside.
   function pickFromList(id: string) {
-    setSelectedId(id)
-    if (isSmall) setSide(null)
+    selectBuilding(id)
   }
 
   // Measure the bottom stack so the map's own bottom controls sit just above it
@@ -160,7 +167,7 @@ export default function App() {
   )
 
   const sidePanel = side === 'ask'
-    ? <AskPanel onClose={closeSide} />
+    ? null
     : side === 'events'
       ? <EventsPanel onClose={closeSide} onSelect={pickFromList} />
     : side === 'list' && now.data
@@ -179,7 +186,7 @@ export default function App() {
         {buildings.data ? (
           <CampusMap buildings={buildings.data} scores={scores} selectedId={selectedId} is3D={is3D} foodMode={foodMode}
             pad={isSmall ? undefined : { left: sidePanel ? 360 : 0, right: panel ? 360 : 0 }}
-            onSelect={setSelectedId} />
+            onSelect={selectBuilding} />
         ) : (
           <div className="grid h-full place-items-center text-white/75">Loading campus…</div>
         )}
@@ -283,6 +290,13 @@ export default function App() {
           on3D={() => setIs3D((v) => !v)}
         />
       </div>
+
+      {/* Ask chat: floats just above the orb that opens it */}
+      {side === 'ask' && (
+        <div className="absolute left-3 z-30 sm:left-4" style={{ bottom: 'calc(var(--bottom-ui, 96px) + 0.25rem)' }}>
+          <AskPanel onClose={closeSide} />
+        </div>
+      )}
 
       {checkinOpen && (
         <CheckInSheet initialSpace={selectedId} onSubmit={submitCheckin} onClose={() => setCheckinOpen(false)} />

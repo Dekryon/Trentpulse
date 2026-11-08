@@ -45,3 +45,8 @@ body { background: #0f1512; color: #e6ece8; font-family: var(--font-sans); }
   0%, 100% { box-shadow: 0 0 0 1px rgba(255,255,255,.25) inset, 0 8px 24px rgba(0,0,0,.45), 0 0 22px rgba(217,172,79,.35); }
   50% { box-shadow: 0 0 0 1px rgba(255,255,255,.25) inset, 0 8px 24px rgba(0,0,0,.45), 0 0 40px rgba(217,172,79,.65); }
 }
+
+/* Ask chat: the three "typing" dots while Gemini answers */
+@keyframes typing { 0%, 80%, 100% { opacity: .3; transform: translateY(0) } 40% { opacity: 1; transform: translateY(-3px) } }
+.typing-dot { animation: typing 1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .typing-dot { animation: none; } }
