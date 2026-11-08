@@ -82,7 +82,7 @@ export function AskPanel({ onClose }: { onClose: () => void }) {
         {state === 'done' && answer && (
           <div className="rounded-lg bg-white/[0.06] px-3 py-2">
             <p>{answer.text}</p>
-            <p className="mt-1 text-[11px] text-white/50">{answer.source === 'gemini' ? 'AI answer from live campus data' : 'Straight from live campus data'}</p>
+            <p className="mt-1 text-[11px] text-white/50">{answer.source === 'gemini' ? 'Answered by Gemini from live data' : 'Answered straight from the data'}</p>
           </div>
         )}
         {state === 'error' && <p className="text-amber-200">{error}</p>}

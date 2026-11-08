@@ -33,9 +33,8 @@ const focus = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visi
 
 // Bottom sheet: pick a building, tap how busy it is. One tap and done.
 // Closes with the Close button, a tap outside, or Escape.
-export function CheckInSheet({ initialSpace, initialPhoto, onSubmit, onClose }: {
+export function CheckInSheet({ initialSpace, onSubmit, onClose }: {
   initialSpace: string | null
-  initialPhoto?: File | null // set when opened from the Photo button: start estimating straight away
   onSubmit: (b: CheckinBody) => Promise<void>
   onClose: () => void
 }) {
@@ -105,16 +104,6 @@ export function CheckInSheet({ initialSpace, initialPhoto, onSubmit, onClose }: 
   }
   const suggested = photo.kind === 'suggested' ? photo.level : null
 
-  // Opened from the Photo button: the photo was already taken, so estimate it now
-  const startedWithPhoto = useRef(false)
-  useEffect(() => {
-    if (initialPhoto && !startedWithPhoto.current) {
-      startedWithPhoto.current = true
-      onPhotoPicked(initialPhoto)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPhoto])
-
   async function pick(level: CheckinBody['level']) {
     if (blocked) return
     setState('sending')
@@ -167,11 +156,11 @@ export function CheckInSheet({ initialSpace, initialPhoto, onSubmit, onClose }: 
               className={`min-h-11 rounded-lg bg-white/10 px-3 text-sm font-semibold hover:bg-white/20 disabled:opacity-60 ${focus}`}>
               {photo.kind === 'checking' ? 'Looking at your photo…' : 'Estimate from a photo'}
             </button>
-            <span className="text-xs text-white/60">Used only for an AI estimate and never saved. Avoid close-ups of people.</span>
+            <span className="text-xs text-white/60">Sent to Google Gemini for the estimate, not saved by TrentPulse. Avoid close-ups of people.</span>
           </div>
           {photo.kind === 'suggested' && (
             <p role="status" className="mt-1.5 text-sm text-white/85">
-              Looks like <b>{photo.level}, {LEVELS[photo.level - 1].label}</b>: {photo.reason} Tap it to confirm, or pick another.
+              Gemini suggests <b>{photo.level}, {LEVELS[photo.level - 1].label}</b>: {photo.reason} Tap it to confirm, or pick another.
             </p>
           )}
           {photo.kind === 'unsure' && <p role="status" className="mt-1.5 text-sm text-amber-200">{photo.text}</p>}

@@ -91,24 +91,19 @@ app.get<{ Params: { id: string } }>('/api/spaces/:id/history', async (req): Prom
     `SELECT bucket AS t, round(avg_score)::int AS score FROM busyness_1h
      WHERE space_id = $1 AND bucket >= date_trunc('day', now() AT TIME ZONE 'America/Toronto') AT TIME ZONE 'America/Toronto'
      ORDER BY bucket`, [id])
-  // Typical score per campus hour for today's weekday, stamped at that hour of
-  // today in campus time (the server runs in UTC, so this is done in SQL).
-  const typical = await pool.query<{ t: Date; score: number }>(
-    `SELECT (date_trunc('day', now() AT TIME ZONE 'America/Toronto') + make_interval(hours => h)) AT TIME ZONE 'America/Toronto' AS t,
-            score
-     FROM (
-       SELECT extract(hour FROM bucket AT TIME ZONE 'America/Toronto')::int AS h, round(avg(avg_score))::int AS score
-       FROM busyness_1h
-       WHERE space_id = $1
-         AND extract(isodow FROM bucket AT TIME ZONE 'America/Toronto') = extract(isodow FROM now() AT TIME ZONE 'America/Toronto')
-         AND bucket < now() - INTERVAL '1 day'
-       GROUP BY 1
-     ) x
-     WHERE h BETWEEN 7 AND 23
-     ORDER BY h`, [id])
+  const typical = await pool.query<{ h: number; score: number }>(
+    `SELECT extract(hour FROM bucket AT TIME ZONE 'America/Toronto')::int AS h, round(avg(avg_score))::int AS score
+     FROM busyness_1h
+     WHERE space_id = $1
+       AND extract(isodow FROM bucket AT TIME ZONE 'America/Toronto') = extract(isodow FROM now() AT TIME ZONE 'America/Toronto')
+       AND bucket < now() - INTERVAL '1 day'
+     GROUP BY 1 ORDER BY 1`, [id])
+  const day = new Date(); day.setMinutes(0, 0, 0)
   return {
     today: today.rows.map((r) => ({ t: new Date(r.t).toISOString(), score: r.score })),
-    typical: typical.rows.map((r) => ({ t: new Date(r.t).toISOString(), score: r.score })),
+    typical: typical.rows.filter((r) => r.h >= 7 && r.h <= 23).map((r) => {
+      const t = new Date(day); t.setHours(r.h); return { t: t.toISOString(), score: r.score }
+    }),
   }
 })
 
