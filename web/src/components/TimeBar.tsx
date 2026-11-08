@@ -30,7 +30,7 @@ export function TimeBar({ minutes, day, live, playing, is3D, onMinutes, onDay, o
         type="range" min={420} max={1380} step={10} value={minutes}
         onChange={(e) => onMinutes(Number(e.target.value))}
         aria-label="Time of day" aria-valuetext={label}
-        className={`h-11 min-w-[140px] flex-1 accent-[#e0a526] sm:h-auto ${focus}`}
+        className={`h-11 min-w-[140px] flex-1 accent-[#e0a526] sm:h-8 ${focus}`}
       />
       <div className="flex w-full gap-2 sm:w-auto">
         <select value={day} onChange={(e) => onDay(Number(e.target.value))} aria-label="Day of week"
