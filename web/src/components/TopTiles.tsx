@@ -10,12 +10,12 @@ function Tile({ label, value, sub, dot, className = '' }: {
 }) {
   return (
     <div className={`glass shrink-0 rounded-xl px-3.5 py-2.5 ${className}`}>
-      <div className="whitespace-nowrap text-[11px] uppercase tracking-wide text-white/65">{label}</div>
+      <div className="whitespace-nowrap text-xs uppercase tracking-wide text-white/75">{label}</div>
       <div className="flex items-center gap-1.5 whitespace-nowrap font-[Archivo] text-base font-extrabold">
         {dot && <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: dot }} />}
         {value}
       </div>
-      {sub && <div className="whitespace-nowrap text-xs text-white/65">{sub}</div>}
+      {sub && <div className="whitespace-nowrap text-xs text-white/80">{sub}</div>}
     </div>
   )
 }

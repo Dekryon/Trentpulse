@@ -240,7 +240,9 @@ export function CampusMap({ buildings, scores, selectedId, is3D, onSelect }: Pro
             onClick={(e) => { e.originalEvent.stopPropagation(); onSelect(id) }}>
             <button
               type="button"
-              aria-label={`${f.properties.name}, score ${s}`}
+              data-space-id={id}
+              aria-pressed={selectedId === id}
+              aria-label={`${f.properties.name}, ${s <= 25 ? 'Quiet' : s <= 50 ? 'Moderate' : s <= 75 ? 'Busy' : 'Packed'}, score ${s} out of 100`}
               className={`glass flex items-center rounded-full font-semibold text-white shadow-lg transition hover:scale-105 ${small ? 'gap-1 px-1.5 py-0.5 text-[9.5px]' : 'gap-1.5 px-2.5 py-1 text-[11px]'} ${selectedId === id ? 'ring-2 ring-white' : ''}`}
               title={f.properties.approx ? 'Approximate location: no outline found in OpenStreetMap' : f.properties.osmName}
             >

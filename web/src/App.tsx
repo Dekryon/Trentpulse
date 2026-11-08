@@ -59,6 +59,24 @@ export default function App() {
   // The side panel: the list of all spaces, or Ask TrentPulse (one at a time)
   const [side, setSide] = useState<'list' | 'ask' | null>(null)
   const toggleSide = (which: 'list' | 'ask') => setSide((v) => (v === which ? null : which))
+
+  // When a panel closes, put keyboard focus back on the button that opened it,
+  // so keyboard and screen reader users don't land back at the top of the page.
+  const sideButtons = useRef<Record<'list' | 'ask', HTMLButtonElement | null>>({ list: null, ask: null })
+  function closeSide() {
+    const which = side
+    setSide(null)
+    // A timer, not requestAnimationFrame: rAF never fires in a background tab
+    if (which) setTimeout(() => sideButtons.current[which]?.focus(), 0)
+  }
+  function closeDetails() {
+    const id = selectedId
+    setSelectedId(null)
+    setTimeout(() => {
+      const pin = id ? document.querySelector<HTMLElement>(`[data-space-id="${id}"]`) : null
+      ;(pin ?? sideButtons.current.list)?.focus()
+    }, 0)
+  }
   const [localCheckins, setLocalCheckins] = useState(0)
 
   // Picking a space from the list opens its details. On a phone the side panel and
@@ -136,24 +154,32 @@ export default function App() {
       at={at}
       events={now.data?.events ?? []}
       compact={isSmall}
-      onClose={() => setSelectedId(null)}
+      onClose={closeDetails}
       onCheckin={() => setCheckinOpen(true)}
     />
   )
 
   const sidePanel = side === 'ask'
-    ? <AskPanel onClose={() => setSide(null)} />
+    ? <AskPanel onClose={closeSide} />
     : side === 'list' && now.data
-      ? <SpaceList spaces={now.data.spaces} selectedId={selectedId} onSelect={pickFromList} onClose={() => setSide(null)} />
+      ? <SpaceList spaces={now.data.spaces} selectedId={selectedId} onSelect={pickFromList} onClose={closeSide} />
       : null
 
   return (
-    <div ref={rootRef} className="relative h-full w-full overflow-hidden">
-      {buildings.data ? (
-        <CampusMap buildings={buildings.data} scores={scores} selectedId={selectedId} is3D={is3D} onSelect={setSelectedId} />
-      ) : (
-        <div className="grid h-full place-items-center text-white/60">Loading campus…</div>
-      )}
+    <main ref={rootRef} className="relative h-full w-full overflow-hidden">
+      {/* First stop for keyboard users: skip the map and go straight to the text list */}
+      <button type="button" onClick={() => setSide('list')}
+        className="sr-only font-semibold focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-xl focus:bg-white focus:px-4 focus:py-3 focus:text-black">
+        Skip the map: open the list of all spaces
+      </button>
+
+      <div className="h-full w-full" role="region" aria-label="Campus map. Each building's name and busyness is a button; the List button gives the same information as text.">
+        {buildings.data ? (
+          <CampusMap buildings={buildings.data} scores={scores} selectedId={selectedId} is3D={is3D} onSelect={setSelectedId} />
+        ) : (
+          <div className="grid h-full place-items-center text-white/75">Loading campus…</div>
+        )}
+      </div>
 
       {/* Top: brand + tiles. Right padding leaves room for the zoom buttons. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-2 p-3 pr-14 sm:p-4 sm:pr-16">
@@ -162,7 +188,9 @@ export default function App() {
             Trent<span className="text-gold">Pulse</span>
           </h1>
           {(['list', 'ask'] as const).map((which) => (
-            <button key={which} onClick={() => toggleSide(which)} aria-pressed={side === which}
+            <button key={which} ref={(el) => { sideButtons.current[which] = el }}
+              onClick={() => toggleSide(which)}
+              aria-expanded={side === which} aria-controls={side === which ? `side-${which}` : undefined}
               className={`glass pointer-events-auto min-h-11 rounded-xl px-3.5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${side === which ? 'bg-white/20 text-white' : 'text-white/85 hover:bg-white/10'}`}>
               {which === 'list' ? 'List' : 'Ask'}
             </button>
@@ -231,6 +259,6 @@ export default function App() {
       {checkinOpen && (
         <CheckInSheet initialSpace={selectedId} onSubmit={submitCheckin} onClose={() => setCheckinOpen(false)} />
       )}
-    </div>
+    </main>
   )
 }
