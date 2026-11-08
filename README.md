@@ -28,7 +28,7 @@ score       = live weight × live + (0.8 − live weight) × baseline + 0.2 × l
 ```
 
 - **live**: the average of recent check-ins, newer ones weighted more. Only each device's latest vote counts.
-- **baseline**: the typical score for this weekday and hour, read from a Tiger Data continuous aggregate.
+- **baseline**: the typical score for this weekday and quarter hour, read from a Tiger Data continuous aggregate, so the rush when classes let out at :50 shows on the map.
 - **lecture boost**: while a big class is in session its building gets a boost; for 25 minutes after it ends, nearby spaces get one that fades with distance and time.
 
 One check-in already moves the map a little; three or more give live reports their full weight. With no check-ins the score rests on the baseline, so the map is never blank.
@@ -43,15 +43,16 @@ Tiger Data (TimescaleDB on Postgres) is the core of the project, not just storag
 |---|---|---|
 | **Hypertables** | `checkins`, `samples` | Time-partitioned tables for every check-in and for the history feed |
 | **Continuous aggregate** `busyness_5m` | over `checkins` | 5-minute rollups, refreshed every minute, real-time |
-| **Continuous aggregate** `busyness_1h` | over `samples` | Hourly rollups that power the baseline, the forecast and the charts |
+| **Continuous aggregate** `busyness_15m` | over `samples` | 15-minute rollups that power the baseline and the forecast, fine enough to show class-change rushes |
+| **Continuous aggregate** `busyness_1h` | over `samples` | Hourly rollups for the today vs typical charts |
 | **Compression** | `samples`, segmented by `space_id` | Chunks older than 7 days are compressed automatically |
 | **Plain SQL** | everywhere | `time_bucket`, `DISTINCT ON`, window filters; nothing exotic |
 
 Current numbers, shown live in the app's Tiger Data tile and at `/api/stats`:
 
 - **1,166,400 rows** of history (90 days × 9 spaces × one per minute)
-- **122.8 MB → 2.0 MB** for the compressed chunks, **60.4×** across the whole table
-- **about 40 ms** to score all nine spaces (live check-ins, baseline and lecture boost together)
+- **122.4 MB → 2.0 MB** for the compressed chunks, **60×** across the whole table
+- **about 17 ms** on the server to score all nine spaces (live check-ins, baseline and lecture boost together)
 
 The schema is in [`db/schema.sql`](db/schema.sql).
 
@@ -163,7 +164,7 @@ db/    schema.sql for Tiger Data
 ## What is real and what is simulated
 
 - **Real:** the buildings and their outlines, every check-in, the scoring, the Tiger Data features and numbers, and the Gemini answers.
-- **Simulated:** the 90 days of history come from a seed script with hand-shaped daily curves per type of space (library, gym, college and so on). They give the baseline something to work with until real check-ins build up.
+- **Simulated:** the 90 days of history come from a minute-by-minute model of how students move (`api/scripts/flow-model.ts`): classes on the hour until :50, lecture halls emptying at the changeover, students flowing to nearby spaces for about 25 minutes weighted by walking distance, meal and gym peaks, evening study Sunday to Thursday, quiet weekends, a quiet summer before term and Thanksgiving. It gives the baseline realistic shape until real check-ins build up.
 - **Sample:** the lecture schedule is a sample of 12 big sections. Real class sizes and rooms sit behind the student portal, which we did not scrape.
 
 ## What's next
@@ -172,7 +173,7 @@ db/    schema.sql for Tiger Data
 - Wi-Fi or card-swipe counts from Trent IT as a second live signal, still with no new hardware
 - QR codes at building entrances as proof of presence for check-ins
 - "Tell me when it's quiet" alerts for a chosen space
-- Forecasts learned from real check-in history instead of hand-shaped curves
+- Forecasts learned from real check-in history instead of the simulated flow model
 - More spaces, the Durham GTA campus, and other schools
 
 ## Team

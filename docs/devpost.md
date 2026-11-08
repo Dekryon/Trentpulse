@@ -35,9 +35,9 @@ When nobody has checked in, the map still works: it falls back on the typical pa
 
 ## How we built it
 
-**Tiger Data** sits at the centre. Check-ins and the history feed live in **hypertables**. Two **continuous aggregates** keep 5-minute and hourly rollups up to date on their own, and the hourly one powers the baseline, the forecast and the charts. A **compression policy** shrinks anything older than a week: our 1,166,400 rows of history take 2.0 MB instead of 122.8 MB in the compressed chunks, 60× across the whole table. Scoring all nine spaces takes about 40 ms. These numbers are live in the app's Tiger Data tile.
+**Tiger Data** sits at the centre. Check-ins and the history feed live in **hypertables**. Three **continuous aggregates** keep 5-minute, 15-minute and hourly rollups up to date on their own; the 15-minute one powers the baseline and forecast, fine enough to show the rush when classes let out. A **compression policy** shrinks anything older than a week: our 1,166,400 rows of history take 2.0 MB instead of 122.4 MB in the compressed chunks, 60× across the whole table. Scoring all nine spaces takes about 17 ms on the server. These numbers are live in the app's Tiger Data tile.
 
-The **score** blends three signals: recent check-ins (each device's latest vote, newer ones weighted more), the typical score for this weekday and hour, and a boost near big lectures that fades with distance and time. Live reports gain weight as they add up, so one person can nudge the map but can't flip it.
+The **score** blends three signals: recent check-ins (each device's latest vote, newer ones weighted more), the typical score for this weekday and quarter hour, and a boost near big lectures that fades with distance and time. Live reports gain weight as they add up, so one person can nudge the map but can't flip it.
 
 **Gemini** handles the parts that need understanding. Photo check-in uses its multimodal input to judge how full a room is. Ask TrentPulse gives it the live data and a forecast and asks it to answer in two sentences without inventing anything. To live within the free tier we chain five flash models, skip any that report their quota is used up, cache answers, and fall back to a plain data answer.
 
@@ -80,7 +80,7 @@ The **website** is React, Vite, TypeScript and Tailwind, with MapLibre drawing E
 
 ## A note on the data
 
-The buildings, check-ins, scoring and Gemini answers are real. The 90 days of history are simulated by a seed script with daily patterns for each type of space, so the baseline has something to work with until real check-ins build up. The lecture schedule is a sample of 12 big sections, since real class sizes and rooms sit behind the student portal, which we didn't scrape.
+The buildings, check-ins, scoring and Gemini answers are real. The 90 days of history are simulated by a minute-by-minute model of how students move: classes changing at :50, students flowing from lecture halls to nearby spaces, meal and gym peaks, quiet weekends and the term calendar. It gives the baseline realistic shape until real check-ins build up. The lecture schedule is a sample of 12 big sections, since real class sizes and rooms sit behind the student portal, which we didn't scrape.
 
 ---
 
