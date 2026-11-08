@@ -35,6 +35,7 @@ export function BuildingPanel({ space, at, events, compact = false, onClose, onC
         <div>
           <div className="text-[11px] uppercase tracking-wide text-white/60">{def.bank === 'west' ? 'West Bank' : 'East Bank'}</div>
           <h2 className="font-[Archivo] text-xl font-extrabold leading-tight">{def.name}</h2>
+          {def.food && <p className="mt-0.5 text-xs text-white/75">Food here: {def.food}</p>}
         </div>
         <button onClick={onClose} aria-label={`Close ${def.name} details`}
           className="-mr-1 -mt-1 grid h-10 w-10 shrink-0 place-items-center rounded-lg text-lg text-white/70 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-white">

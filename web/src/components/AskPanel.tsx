@@ -6,7 +6,7 @@ import { askQuestion } from '../lib/api'
 const EXAMPLES = [
   'Where is quiet to study right now?',
   'When will Bata be quieter?',
-  'Busiest place on the East Bank?',
+  'Which dining hall is quietest for lunch?',
 ]
 
 const focus = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'

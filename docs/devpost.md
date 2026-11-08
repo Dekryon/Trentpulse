@@ -16,71 +16,61 @@ See how busy every study spot at Trent is right now, and when it'll be quiet. No
 
 ## Inspiration
 
-Every Trent student knows the walk: you cross the Faryon Bridge to Bata Library, climb the stairs, and every seat is taken. Then you try the Student Centre. Then Champlain.
+You cross the Faryon Bridge to Bata, head upstairs, and there's nowhere to sit. Most of us have made that walk more times than we'd like, usually before trying somewhere else and finding that full too.
 
-Bigger universities solve this with door sensors from companies like Waitz and Occuspace. Trent doesn't have them, and buying hardware for every building isn't realistic. We wanted the same answer, "is it busy right now?", built from things a campus already has: its students' phones, its own history and its class schedule.
+Bigger schools answer "is it busy?" with door sensors from companies like Waitz and Occuspace. Trent doesn't have any, and putting hardware in every building wasn't something we could do in a weekend. So we tried to get close to the same answer using students' phones and the campus's own patterns.
 
 ## What it does
 
-TrentPulse is a live map of Symons Campus. Nine study and hangout spaces on both banks of the Otonabee are coloured from green to red by how busy they are, with the level always written as a word too (Quiet, Moderate, Busy, Packed).
+TrentPulse is a map of Symons Campus with nine study and hangout spaces coloured from green to red. Each one also shows its level in words, so nobody has to rely on colour alone.
 
-- **One-tap check-ins.** Students rate a space from 1 (empty) to 5 (packed). Everyone's map updates within 15 seconds.
-- **Photo check-in.** Snap the room and Gemini suggests the level; the student confirms with one tap.
-- **Ask TrentPulse.** Questions like "When will Bata be quieter?" are answered by Gemini from live scores and a four-hour forecast.
-- **Time travel.** Drag the time bar or press Play day to watch a typical day, including the rush after a big lecture lets out.
-- **3D view.** Tilt the map and busier buildings rise higher.
-- **List view.** Every space, quietest first, fully usable with a keyboard or a screen reader.
+When you're in a space you can rate it from 1 (empty) to 5 (packed), and everyone's map picks it up within 15 seconds. If you'd rather not judge it yourself, take a photo and Gemini suggests a level for you to confirm. There's also an Ask box where you can type something like "When will Bata be quieter?" and get an answer based on the current scores and the next four hours of forecast.
 
-When nobody has checked in, the map still works: it falls back on the typical pattern for that weekday and hour, so it's never blank.
+The time bar lets you scrub through a typical day. Tuesday at 10:50 is a good one to watch: the lecture halls empty out and the Student Centre fills up within a few minutes. You can tilt the map into 3D, where busier buildings stand taller, or switch to a list view that works with a keyboard and screen reader.
+
+If nobody has checked in recently, the map falls back on what that weekday and time usually looks like, so it's never empty.
 
 ## How we built it
 
-**Tiger Data** sits at the centre. Check-ins and the history feed live in **hypertables**. Three **continuous aggregates** keep 5-minute, 15-minute and hourly rollups up to date on their own; the 15-minute one powers the baseline and forecast, fine enough to show the rush when classes let out. A **compression policy** shrinks anything older than a week: our 1,166,400 rows of history take 2.0 MB instead of 122.4 MB in the compressed chunks, 60× across the whole table. Scoring all nine spaces takes about 17 ms on the server. These numbers are live in the app's Tiger Data tile.
+Tiger Data does most of the heavy lifting. Check-ins and the history feed are hypertables, and on top of them we run continuous aggregates at 5 minutes, 15 minutes and an hour. The 15-minute one is what makes the class-change rush visible; hourly averages smoothed it out completely. A compression policy handles older history, and our 1,166,400 rows shrink from 122.4 MB to 2.0 MB in the compressed chunks, about 60× across the table. Scoring every space takes around 17 ms on the server, and the app shows these numbers live in its Tiger Data tile.
 
-The **score** blends three signals: recent check-ins (each device's latest vote, newer ones weighted more), the typical score for this weekday and quarter hour, and a boost near big lectures that fades with distance and time. Live reports gain weight as they add up, so one person can nudge the map but can't flip it.
+The score mixes recent check-ins with the usual level for that weekday and quarter hour, plus a boost for spaces near a big lecture that just ended. One check-in moves the score a little. It takes three before live reports get their full weight, which stops a single bad report from turning a building red.
 
-**Gemini** handles the parts that need understanding. Photo check-in uses its multimodal input to judge how full a room is. Ask TrentPulse gives it the live data and a forecast and asks it to answer in two sentences without inventing anything. To live within the free tier we chain five flash models, skip any that report their quota is used up, cache answers, and fall back to a plain data answer.
+Gemini handles photo check-ins and the Ask box. For questions we send it the live scores and forecast and tell it to answer only from that data. The free tier ran out on us during testing, so the API now tries five flash models in order, skips any that say they're out of quota, caches answers, and falls back to a plain answer built from the data if none of them respond.
 
-The **website** is React, Vite, TypeScript and Tailwind, with MapLibre drawing Esri satellite imagery and real building outlines from OpenStreetMap. The **API** is Fastify on Node. The website is hosted on Vercel and the API on Render.
+The front end is React with TypeScript, Vite and Tailwind. MapLibre draws Esri satellite imagery and building outlines from OpenStreetMap. The API is Fastify on Node, hosted on Render, and the site is on Vercel.
 
-**Privacy was a design rule, not an afterthought.** There are no accounts. Phones get an anonymous ID only for one-vote-per-building limits. "Use my location" runs entirely on the phone and never sends coordinates. Photos are never stored. The API refuses requests that don't come from our site.
+There are no accounts. Each phone gets a random ID so it can only vote once per building every 15 minutes. "Use my location" works out the nearest building on the phone itself, and coordinates never reach our server. Photos aren't stored, and the API only answers requests coming from our own site.
 
 ## Challenges we ran into
 
-- **Our first score ignored single check-ins.** With fewer than three reports it fell back to history, so a live check-in during a demo changed nothing. We replaced the cutoff with a weight that ramps up per report.
-- **Gemini's free tier is about 20 requests per model per day,** and we used it up while testing. Ask, tips and photos now share a chain of five models with caching and quota-aware skipping. The model we started with had also been retired for new users, which we only found by reading the error.
-- **Compressed data confused our row count.** After compression, Tiger's fast row estimate reported about 83,000 rows instead of 1.17 million until we refreshed the table statistics. The seed now does that automatically.
-- **Our building positions were up to 600 m off.** We had guessed coordinates; computing centres from the real OpenStreetMap outlines fixed walking distances and nearby-spot suggestions.
-- **Trusting check-ins without tracking people.** We can't prove where a phone is, so we made fake check-ins not matter instead: one vote per device, capped influence, and a baseline that anchors the score.
-- **Making a map work on a phone.** The first mobile version hid the map behind its own panels. We rebuilt the layout so the map stays visible and every control is thumb-sized.
+Our first version of the score ignored check-ins until a space had three of them. We found out when we checked in at Bata during a test and nothing changed. Replacing the cutoff with a weight that grows with each report fixed it.
+
+Gemini's free tier allows about 20 requests per model per day, and we burned through it while testing. The model we started with had also been retired for new accounts, which we only worked out from the error message. That's where the five-model fallback came from.
+
+After compressing the history, Tiger's quick row estimate said we had about 83,000 rows instead of 1.17 million. Running ANALYZE fixed it, and the seed script does that automatically now.
+
+Our building coordinates started as guesses, and some were 600 m off. We recalculated them from the real OpenStreetMap outlines, which also corrected the walking distances behind the lecture boost.
+
+On phones, the first layout covered most of the map with panels. We rebuilt it so the map stays visible.
 
 ## Accomplishments that we're proud of
 
-- A full loop that really works: a phone check-in at Bata moved its score from 22 to 46 on everyone's screen.
-- Real time-series engineering on Tiger Data, with hypertables, continuous aggregates and compression all doing live work.
-- Gemini used in two genuinely different ways, reading photos and reasoning over live data, both grounded in our numbers.
-- Accessibility from the start: words beside colours, a full list view, keyboard and screen reader support.
-- A privacy model we can explain in one sentence: we never know who you are or where you are.
+Checking in from a phone at Bata and watching its score go from 22 to 46 on another screen. That was when it started to feel like a real product.
+
+We're also glad the Tiger Data features are doing actual work in the app instead of sitting on a slide, and that photo check-in ended up fast enough to use, at about a second.
 
 ## What we learned
 
-- Time-series data wants time-series tools. Continuous aggregates turned what would have been slow queries over a million rows into instant lookups.
-- Free AI tiers run out fast; design the fallback first.
-- A good crowd-sourced score has to work with zero reports and stay calm with one bad one.
-- Looking at the app on a real phone finds problems no test does.
+Continuous aggregates were the biggest lesson: queries over a million rows became quick lookups. We also learned to build the fallback for a free AI tier before depending on it, and that a crowd-sourced score has to behave sensibly with zero reports long before it has many.
 
 ## What's next for TrentPulse
 
-- Trent's timetable feed from the Registrar, so every class counts automatically
-- Wi-Fi or card-swipe counts from Trent IT as a second live signal, still with no new hardware
-- QR codes at building entrances as proof of presence
-- "Tell me when it's quiet" alerts
-- Forecasts learned from real check-in history
-- More spaces, the Durham GTA campus, and other schools
+The obvious next step is Trent's real timetable, so every class feeds the lecture boost instead of our sample of 12. Wi-Fi connection counts from Trent IT would add a second live signal without any new hardware. Further out we'd like QR codes at entrances to confirm check-ins, alerts when a space gets quiet, and forecasts trained on real check-ins once there are enough of them.
 
 ## A note on the data
 
-The buildings, check-ins, scoring and Gemini answers are real. The 90 days of history are simulated by a minute-by-minute model of how students move: classes changing at :50, students flowing from lecture halls to nearby spaces, meal and gym peaks, quiet weekends and the term calendar. It gives the baseline realistic shape until real check-ins build up. The lecture schedule is a sample of 12 big sections, since real class sizes and rooms sit behind the student portal, which we didn't scrape.
+The buildings, check-ins, scoring and Gemini answers are real. The 90 days of history are simulated by a minute-by-minute model of how students move: classes end at :50, people walk from lecture halls to the nearest spaces, meals and gym hours have their own peaks, and weekends are quiet. It gives the baseline a realistic shape until real check-ins build up. The lecture schedule is a sample of 12 big sections, because real class sizes and rooms sit behind the student portal.
 
 ---
 

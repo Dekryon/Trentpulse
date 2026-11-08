@@ -170,7 +170,7 @@ app.get('/api/suggest', async (req, reply) => {
   if (!here) return reply.code(404).send({ error: 'Unknown space' })
   const { scores } = await computeScores(new Date())
   const list = spaces.filter((s) => s.type !== 'lecture')
-    .map((s) => `${s.name}: ${levelOf(scores[s.id])} (${scores[s.id]}/100)`).join('\n')
+    .map((s) => `${s.name}${FOOD[s.id] ? ` (food: ${FOOD[s.id]})` : ''}: ${levelOf(scores[s.id])} (${scores[s.id]}/100)`).join('\n')
   const fallback = () => {
     const best = spaces.filter((s) => s.id !== near && s.type !== 'lecture' && s.type !== 'gym')
       .sort((a, b) => scores[a.id] - scores[b.id])[0]
@@ -185,7 +185,7 @@ app.get('/api/suggest', async (req, reply) => {
   const cacheKey = `${near}:${levelOf(scores[near])}`
   const cached = tipCache.get(cacheKey)
   if (cached && Date.now() - cached.at < TIP_TTL_MS) return { text: cached.text }
-  const prompt = `You help Trent University students find a place to study or hang out.
+  const prompt = `You help Trent University students find a place to study, eat or hang out.
 Current busyness on Symons Campus:
 ${list}
 The student is looking at ${here.name}. In one short sentence (max 20 words), say how busy it is and,
@@ -195,6 +195,12 @@ if it is busy or packed, suggest the best quieter alternative. Friendly, no emoj
   tipCache.set(cacheKey, { text, at: Date.now() })
   return { text }
 })
+
+// Where to eat inside each building, so Ask can answer food questions.
+// Keep in step with `food` in web/src/lib/spaces.ts.
+const FOOD: Record<string, string> = {
+  sc: 'Starbucks', cc: 'dining hall', lec: 'dining hall', oc: 'dining hall and Tim Hortons',
+}
 
 // POST /api/ask {question} : Ask TrentPulse. Gemini answers a student's question
 // using only live scores and the next few hours of the typical-week forecast.
@@ -234,14 +240,16 @@ app.post('/api/ask', async (req, reply) => {
   const current = now.spaces.map((s) => {
     const sp = byId[s.id]
     const trend = s.trend === 'up' ? 'filling up' : s.trend === 'down' ? 'emptying' : 'steady'
-    return `- ${sp.name} (${typeName[sp.type]}, ${sp.bank === 'west' ? 'West' : 'East'} Bank): ${s.level} ${s.score}/100, ${trend}, ${s.reports_20m} check-ins in the last 20 min`
+    const food = FOOD[sp.id] ? `, food: ${FOOD[sp.id]}` : ''
+    return `- ${sp.name} (${typeName[sp.type]}${food}, ${sp.bank === 'west' ? 'West' : 'East'} Bank):${s.level} ${s.score}/100, ${trend}, ${s.reports_20m} check-ins in the last 20 min`
   }).join('\n')
   const forecast = now.spaces.map((s) =>
     `- ${byId[s.id].name}: ` + ahead.map((a) => `${campusClock(a.t)} ${a.scores[s.id]}`).join(', ')).join('\n')
 
   const prompt = `You are TrentPulse, a helper for students on Trent University's Symons Campus in Peterborough, Ontario.
 Answer the student's question using only the data below. Scores run from 0 (empty) to 100 (packed): quiet 0-25, moderate 26-50, busy 51-75, packed 76-100.
-If the question is not about where to go on campus or how busy campus spaces are, say briefly that you can only help with how busy campus spaces are.
+Students often ask where to eat. The food listed next to a space (dining halls, Starbucks, Tim Hortons) is inside that building, and its score covers the whole building including the food line.
+If the question is not about where to go on campus, where to eat on campus, or how busy campus spaces are, say briefly that you can only help with how busy campus spaces are.
 Never invent buildings, events, opening hours or numbers that are not in the data. Answer in at most 2 short sentences. Friendly, plain text, no emojis, no markdown.
 
 Campus time now: ${campusClock(at, true)}.

@@ -56,14 +56,14 @@ export function SpaceList({ spaces, selectedId, onSelect, onClose }: {
               <button
                 onClick={() => onSelect(s.id)}
                 aria-current={selectedId === s.id ? 'true' : undefined}
-                aria-label={`${def.name}, ${LEVEL_LABEL[s.level]}, score ${s.score} out of 100, ${def.bank === 'west' ? 'West Bank' : 'East Bank'}, ${reports} in the last 20 minutes`}
+                aria-label={`${def.name}${def.food ? `, food: ${def.food}` : ''}, ${LEVEL_LABEL[s.level]}, score ${s.score} out of 100, ${def.bank === 'west' ? 'West Bank' : 'East Bank'}, ${reports} in the last 20 minutes`}
                 className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white ${selectedId === s.id ? 'bg-white/10 ring-1 ring-white/40' : 'bg-white/[0.04]'}`}
               >
                 <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full" style={{ background: heatColor(s.score) }} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-semibold">{def.name}</span>
                   <span className="block text-xs text-white/60">
-                    {TYPE_LABEL[def.type]} · {def.bank === 'west' ? 'West Bank' : 'East Bank'} · {reports}
+                    {def.food ?? TYPE_LABEL[def.type]} ·{def.bank === 'west' ? 'West Bank' : 'East Bank'} · {reports}
                   </span>
                 </span>
                 <span className="text-right">
