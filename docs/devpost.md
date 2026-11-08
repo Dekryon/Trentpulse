@@ -10,23 +10,23 @@ TrentPulse
 
 ## Tagline (short description)
 
-See how busy every study spot at Trent is right now, and when it'll be quiet. No sensors needed.
+See how busy Trent's dining halls, cafés and study spots are right now, and when they'll be quiet. No sensors needed.
 
 ---
 
 ## Inspiration
 
-You cross the Faryon Bridge to Bata, head upstairs, and there's nowhere to sit. Most of us have made that walk more times than we'd like, usually before trying somewhere else and finding that full too.
+You've got an hour before your next class, so you walk to the Champlain dining hall and the line is out the door. The Starbucks in the Student Centre isn't any better. By the time you find somewhere to eat, half the break is gone. The same thing happens at Bata when every seat upstairs is taken.
 
 Bigger schools answer "is it busy?" with door sensors from companies like Waitz and Occuspace. Trent doesn't have any, and putting hardware in every building wasn't something we could do in a weekend. So we tried to get close to the same answer using students' phones and the campus's own patterns.
 
 ## What it does
 
-TrentPulse is a map of Symons Campus with nine study and hangout spaces coloured from green to red. Each one also shows its level in words, so nobody has to rely on colour alone.
+TrentPulse is a map of Symons Campus coloured from green to red by how busy each place is. It covers the dining halls at Champlain, Lady Eaton and Otonabee, the Starbucks in the Student Centre, the Tim Hortons in Otonabee, Bata Library, the Athletics Centre and the main lecture buildings. Each one also shows its level in words, so nobody has to rely on colour alone, and the food inside each building is listed in its panel.
 
-When you're in a space you can rate it from 1 (empty) to 5 (packed), and everyone's map picks it up within 15 seconds. If you'd rather not judge it yourself, take a photo and Gemini suggests a level for you to confirm. There's also an Ask box where you can type something like "When will Bata be quieter?" and get an answer based on the current scores and the next four hours of forecast.
+When you're in a space you can rate it from 1 (empty) to 5 (packed), and everyone's map picks it up within 15 seconds. If you'd rather not judge it yourself, take a photo and Gemini suggests a level for you to confirm. There's also an Ask box where you can type something like "Which dining hall is quietest for lunch?" and get an answer based on the current scores and the next four hours of forecast.
 
-The time bar lets you scrub through a typical day. Tuesday at 10:50 is a good one to watch: the lecture halls empty out and the Student Centre fills up within a few minutes. You can tilt the map into 3D, where busier buildings stand taller, or switch to a list view that works with a keyboard and screen reader.
+The time bar lets you scrub through a typical day. Tuesday at 10:50 is a good one to watch: the lecture halls empty out and the Student Centre fills up within a few minutes, then the dining halls peak around lunch. You can tilt the map into 3D, where busier buildings stand taller, or switch to a list view that works with a keyboard and screen reader.
 
 If nobody has checked in recently, the map falls back on what that weekday and time usually looks like, so it's never empty.
 
@@ -36,7 +36,7 @@ Tiger Data does most of the heavy lifting. Check-ins and the history feed are hy
 
 The score mixes recent check-ins with the usual level for that weekday and quarter hour, plus a boost for spaces near a big lecture that just ended. One check-in moves the score a little. It takes three before live reports get their full weight, which stops a single bad report from turning a building red.
 
-Gemini handles photo check-ins and the Ask box. For questions we send it the live scores and forecast and tell it to answer only from that data. The free tier ran out on us during testing, so the API now tries five flash models in order, skips any that say they're out of quota, caches answers, and falls back to a plain answer built from the data if none of them respond.
+Gemini handles photo check-ins and the Ask box. For questions we send it the live scores, the forecast and which food is in which building, and tell it to answer only from that data. That's what lets it answer "where should I eat?" as well as "where should I study?". The free tier ran out on us during testing, so the API now tries five flash models in order, skips any that say they're out of quota, caches answers, and falls back to a plain answer built from the data if none of them respond.
 
 The front end is React with TypeScript, Vite and Tailwind. MapLibre draws Esri satellite imagery and building outlines from OpenStreetMap. The API is Fastify on Node, hosted on Render, and the site is on Vercel.
 
@@ -66,11 +66,11 @@ Continuous aggregates were the biggest lesson: queries over a million rows becam
 
 ## What's next for TrentPulse
 
-The obvious next step is Trent's real timetable, so every class feeds the lecture boost instead of our sample of 12. Wi-Fi connection counts from Trent IT would add a second live signal without any new hardware. Further out we'd like QR codes at entrances to confirm check-ins, alerts when a space gets quiet, and forecasts trained on real check-ins once there are enough of them.
+For food, the next step is tracking each café and dining line on its own instead of scoring the whole building; Trent Food Services' till counts would make that accurate. The other obvious step is Trent's real timetable, so every class feeds the lecture boost instead of our sample of 12. Wi-Fi connection counts from Trent IT would add a second live signal without any new hardware. Further out we'd like QR codes at entrances to confirm check-ins, alerts when a space gets quiet, and forecasts trained on real check-ins once there are enough of them.
 
 ## A note on the data
 
-The buildings, check-ins, scoring and Gemini answers are real. The 90 days of history are simulated by a minute-by-minute model of how students move: classes end at :50, people walk from lecture halls to the nearest spaces, meals and gym hours have their own peaks, and weekends are quiet. It gives the baseline a realistic shape until real check-ins build up. The lecture schedule is a sample of 12 big sections, because real class sizes and rooms sit behind the student portal.
+The buildings, check-ins, scoring and Gemini answers are real. The 90 days of history are simulated by a minute-by-minute model of how students move: classes end at :50, people walk from lecture halls to the nearest spaces, dining halls peak at meal times, the gym has its own hours, and weekends are quiet. It gives the baseline a realistic shape until real check-ins build up. The lecture schedule is a sample of 12 big sections, because real class sizes and rooms sit behind the student portal.
 
 ---
 
