@@ -135,15 +135,22 @@ export function CheckInSheet({ initialSpace, onSubmit, onClose }: {
 
         {CAN_LOCATE && (
           <div className="mt-2">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <button type="button" onClick={locateMe} disabled={locate.kind === 'locating'}
-                className={`min-h-11 rounded-lg bg-white/10 px-3 text-sm font-semibold hover:bg-white/20 disabled:opacity-60 ${focus}`}>
-                {locate.kind === 'locating' ? 'Finding you…' : locate.kind === 'away' ? 'Try again' : 'Use my location'}
-              </button>
-              <span className="text-xs text-white/60">Only used on this phone to pick the nearest building. Never sent or stored.</span>
-            </div>
+            {/* Once the nearest building is picked the button has done its job, so only the
+                confirmation stays. It comes back if locating failed or found you off campus. */}
+            {locate.kind !== 'near' && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <button type="button" onClick={locateMe} disabled={locate.kind === 'locating'}
+                  className={`min-h-11 rounded-lg bg-white/10 px-3 text-sm font-semibold hover:bg-white/20 disabled:opacity-60 ${focus}`}>
+                  {locate.kind === 'locating' ? 'Finding you…' : locate.kind === 'away' ? 'Try again' : 'Use my location'}
+                </button>
+                <span className="text-xs text-white/60">Only used on this phone to pick the nearest building. Never sent or stored.</span>
+              </div>
+            )}
             {'text' in locate && (
-              <p role="status" className={`mt-1.5 text-sm ${locate.kind === 'away' ? 'text-amber-200' : 'text-white/80'}`}>{locate.text}</p>
+              <p role="status" className={`mt-1.5 text-sm ${locate.kind === 'away' ? 'text-amber-200' : 'text-white/80'}`}>
+                {locate.kind === 'near' && <span aria-hidden="true" className="mr-1 text-quiet">✓</span>}
+                {locate.text}
+              </p>
             )}
           </div>
         )}
