@@ -52,6 +52,7 @@ export default function App() {
   const [day, setDay] = useState(START_LIVE ? new Date().getDay() : 2)
   const [playing, setPlaying] = useState(false)
   const [is3D, setIs3D] = useState(false)
+  const [foodMode, setFoodMode] = useState(false)
   // On a phone, open on the map itself; the panel would cover it.
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     window.matchMedia(SMALL_QUERY).matches ? null : 'bata')
@@ -175,7 +176,7 @@ export default function App() {
 
       <div className="h-full w-full" role="region" aria-label="Campus map. Each building's name and busyness is a button; the List button gives the same information as text.">
         {buildings.data ? (
-          <CampusMap buildings={buildings.data} scores={scores} selectedId={selectedId} is3D={is3D} onSelect={setSelectedId} />
+          <CampusMap buildings={buildings.data} scores={scores} selectedId={selectedId} is3D={is3D} foodMode={foodMode} onSelect={setSelectedId} />
         ) : (
           <div className="grid h-full place-items-center text-white/75">Loading campus…</div>
         )}
@@ -195,6 +196,16 @@ export default function App() {
               {which === 'list' ? 'List' : 'Ask'}
             </button>
           ))}
+          {/* Food: highlight the dining halls and cafés on the map, dim everything else */}
+          <button onClick={() => setFoodMode((v) => !v)} aria-pressed={foodMode}
+            aria-label="Food: highlight dining halls and cafés on the map"
+            className={`pointer-events-auto flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold sm:px-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${foodMode ? 'bg-gold text-black shadow-lg' : 'glass text-white/85 hover:bg-white/10'}`}>
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10" /><path d="M17 21V3c-2.2 1.4-3.5 4-3.5 7v3H17" />
+            </svg>
+            {/* On a phone the icon alone keeps the row clear of the zoom buttons */}
+            <span className="hidden sm:inline">Food</span>
+          </button>
           {USING_MOCK && (
             <span className="glass rounded-full px-2.5 py-1 text-[11px] text-white/70" title="Set VITE_API_URL to use the real API">
               Demo data

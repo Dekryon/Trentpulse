@@ -14,6 +14,18 @@ const LABEL_PRIORITY: Record<string, number> = { study: 0, social: 1, college: 2
 const FULL = { font: '600 11px "IBM Plex Sans", ui-sans-serif, sans-serif', extra: 44, height: 30 }
 const SMALL = { font: '600 9.5px "IBM Plex Sans", ui-sans-serif, sans-serif', extra: 24, height: 22 }
 type LabelPlace = { size: 'full' | 'small'; dx: number; dy: number } // shift in px: dx left (-) or right (+), dy up (-) or down (+)
+const ICON_W = 14 // fork-and-knife icon plus its gap, on labels of buildings with food
+
+// Fork and knife, drawn in the label's text colour. Marks buildings with food.
+function FoodIcon({ size }: { size: number }) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <path d="M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10" />
+      <path d="M17 21V3c-2.2 1.4-3.5 4-3.5 7v3H17" />
+    </svg>
+  )
+}
 
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY as string | undefined
 
@@ -46,10 +58,11 @@ interface Props {
   scores: Record<string, number>
   selectedId: string | null
   is3D: boolean
+  foodMode: boolean // highlight buildings with food, dim the rest
   onSelect: (id: string | null) => void
 }
 
-export function CampusMap({ buildings, scores, selectedId, is3D, onSelect }: Props) {
+export function CampusMap({ buildings, scores, selectedId, is3D, foodMode, onSelect }: Props) {
   const mapRef = useRef<MapRef>(null)
   const centers = useMemo(() => centroidsById(buildings), [buildings])
 
@@ -64,8 +77,15 @@ export function CampusMap({ buildings, scores, selectedId, is3D, onSelect }: Pro
   // Put the live score on every building so the map can colour it
   const data = useMemo<Buildings>(() => ({
     ...buildings,
-    features: buildings.features.map((f) => ({ ...f, properties: { ...f.properties, score: scores[f.properties.id] ?? 0 } })),
-  }), [buildings, scores])
+    features: buildings.features.map((f) => ({
+      ...f,
+      properties: {
+        ...f.properties,
+        score: scores[f.properties.id] ?? 0,
+        dim: foodMode && !SPACE_BY_ID[f.properties.id]?.food ? 1 : 0,
+      },
+    })),
+  }), [buildings, scores, foodMode])
 
   // One point per building for the soft heat glow
   const glow = useMemo<FeatureCollection<Point, { score: number }>>(() => ({
@@ -120,8 +140,9 @@ export function CampusMap({ buildings, scores, selectedId, is3D, onSelect }: Pro
       for (const id of order) {
         const p = map.project(centers[id])
         const name = buildings.features.find((x) => x.properties.id === id)?.properties.name ?? id
-        const fullW = textWidth(name, FULL.font) + textWidth(String(scores[id] ?? 0), FULL.font) + FULL.extra
-        const smallW = textWidth(name, SMALL.font) + SMALL.extra
+        const icon = SPACE_BY_ID[id]?.food ? ICON_W : 0
+        const fullW = textWidth(name, FULL.font) + textWidth(String(scores[id] ?? 0), FULL.font) + FULL.extra + icon
+        const smallW = textWidth(name, SMALL.font) + SMALL.extra + icon
         const step = SMALL.height + 2
         const side = smallW / 2 + 8
         const full: LabelPlace & { w: number; h: number } = { size: 'full', dx: 0, dy: 0, w: fullW, h: FULL.height }
@@ -208,14 +229,16 @@ export function CampusMap({ buildings, scores, selectedId, is3D, onSelect }: Pro
       </Source>
 
       <Source id="bld" type="geojson" data={data}>
-        <Layer id="bld-fill" type="fill" layout={vis(!is3D)} paint={{ 'fill-color': HEAT_EXPR, 'fill-opacity': 0.62 }} />
-        <Layer id="bld-line" type="line" layout={vis(!is3D)} paint={{ 'line-color': '#ffffff', 'line-opacity': 0.55, 'line-width': 1 }} />
+        <Layer id="bld-fill" type="fill" layout={vis(!is3D)}
+          paint={{ 'fill-color': HEAT_EXPR, 'fill-opacity': ['case', ['==', ['get', 'dim'], 1], 0.12, 0.62] }} />
+        <Layer id="bld-line" type="line" layout={vis(!is3D)}
+          paint={{ 'line-color': '#ffffff', 'line-opacity': ['case', ['==', ['get', 'dim'], 1], 0.2, 0.55], 'line-width': 1 }} />
         <Layer
           id="bld-3d"
           type="fill-extrusion"
           layout={vis(is3D)}
           paint={{
-            'fill-extrusion-color': HEAT_EXPR,
+            'fill-extrusion-color': ['case', ['==', ['get', 'dim'], 1], '#3b3f3c', HEAT_EXPR],
             'fill-extrusion-height': ['+', 6, ['*', ['coalesce', ['get', 'score'], 0], 0.9]],
             'fill-extrusion-base': 0,
             'fill-extrusion-opacity': 0.9,
@@ -235,6 +258,8 @@ export function CampusMap({ buildings, scores, selectedId, is3D, onSelect }: Pro
         const s = scores[id] ?? 0
         const place = places[id] ?? { size: 'full', dx: 0, dy: 0 }
         const small = place.size === 'small'
+        const food = SPACE_BY_ID[id]?.food
+        const dimmed = foodMode && !food
         return (
           <Marker key={id} longitude={c[0]} latitude={c[1]} anchor="center" offset={[place.dx, place.dy]}
             onClick={(e) => { e.originalEvent.stopPropagation(); onSelect(id) }}>
@@ -242,11 +267,12 @@ export function CampusMap({ buildings, scores, selectedId, is3D, onSelect }: Pro
               type="button"
               data-space-id={id}
               aria-pressed={selectedId === id}
-              aria-label={`${f.properties.name}, ${s <= 25 ? 'Quiet' : s <= 50 ? 'Moderate' : s <= 75 ? 'Busy' : 'Packed'}, score ${s} out of 100`}
-              className={`glass flex items-center rounded-full font-semibold text-white shadow-lg transition hover:scale-105 ${small ? 'gap-1 px-1.5 py-0.5 text-[9.5px]' : 'gap-1.5 px-2.5 py-1 text-[11px]'} ${selectedId === id ? 'ring-2 ring-white' : ''}`}
+              aria-label={`${f.properties.name}, ${s <= 25 ? 'Quiet' : s <= 50 ? 'Moderate' : s <= 75 ? 'Busy' : 'Packed'}, score ${s} out of 100${food ? `, food: ${food}` : ''}`}
+              className={`glass flex items-center rounded-full font-semibold shadow-lg transition hover:scale-105 ${small ? 'gap-1 px-1.5 py-0.5 text-[9.5px]' : 'gap-1.5 px-2.5 py-1 text-[11px]'} ${selectedId === id ? 'ring-2 ring-white' : ''} ${dimmed ? 'text-white/60 opacity-50' : 'text-white'} ${foodMode && food ? 'ring-2 ring-gold' : ''}`}
               title={f.properties.approx ? 'Approximate location: no outline found in OpenStreetMap' : f.properties.osmName}
             >
               <span aria-hidden="true" className={`inline-block rounded-full ${small ? 'h-1.5 w-1.5' : 'h-2 w-2'}`} style={{ background: heatColor(s) }} />
+              {food && <FoodIcon size={small ? 10 : 12} />}
               {f.properties.name}
               {!small && <span className="tabular-nums opacity-70">{s}</span>}
             </button>
