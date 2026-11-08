@@ -9,9 +9,11 @@ import { CAMPUS_CENTER, SPACE_BY_ID } from '../lib/spaces'
 // When labels would overlap, the less important ones shrink to a dot.
 // Places students sit in come first; lecture halls give way first.
 const LABEL_PRIORITY: Record<string, number> = { study: 0, social: 1, college: 2, gym: 3, lecture: 4 }
-const LABEL_FONT = '600 11px "IBM Plex Sans", ui-sans-serif, sans-serif'
-const LABEL_EXTRA_PX = 44 // padding, colour dot, gaps and a little breathing room
-const LABEL_HEIGHT_PX = 30
+// Two label sizes. Widths are measured from the real text; the extra covers
+// padding, the colour dot, gaps and a little breathing room.
+const FULL = { font: '600 11px "IBM Plex Sans", ui-sans-serif, sans-serif', extra: 44, height: 30 }
+const SMALL = { font: '600 9.5px "IBM Plex Sans", ui-sans-serif, sans-serif', extra: 24, height: 22 }
+type LabelPlace = { size: 'full' | 'small'; dx: number; dy: number } // shift in px: dx left (-) or right (+), dy up (-) or down (+)
 
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY as string | undefined
 
@@ -87,15 +89,17 @@ export function CampusMap({ buildings, scores, selectedId, is3D, onSelect }: Pro
 
   const vis = (show: boolean) => ({ visibility: show ? 'visible' : 'none' }) as const
 
-  // Label decluttering. After every move, work out where each label would sit
-  // on screen; any label that would overlap one already placed becomes a dot.
-  // The selected building always keeps its full label. Names return on zoom-in.
-  const [dotIds, setDotIds] = useState<Set<string>>(() => new Set())
+  // Label decluttering, done the way paper maps do it. After every move, place
+  // labels one by one (selected building first, places to sit before lecture
+  // halls). Each label tries, in order: full size at the building; smaller and
+  // name-only at the building; then smaller just above, below, right, left. If none
+  // fits it stays small at the building, so every building always shows its name.
+  const [places, setPlaces] = useState<Record<string, LabelPlace>>({})
   const textWidth = useMemo(() => {
     const ctx = document.createElement('canvas').getContext('2d')
-    return (text: string) => {
+    return (text: string, font: string) => {
       if (!ctx) return text.length * 6.5
-      ctx.font = LABEL_FONT
+      ctx.font = font
       return ctx.measureText(text).width
     }
   }, [])
@@ -105,18 +109,47 @@ export function CampusMap({ buildings, scores, selectedId, is3D, onSelect }: Pro
     const order = Object.keys(centers).sort((a, b) =>
       (a === selectedId ? -1 : 0) - (b === selectedId ? -1 : 0) ||
       (LABEL_PRIORITY[SPACE_BY_ID[a]?.type] ?? 9) - (LABEL_PRIORITY[SPACE_BY_ID[b]?.type] ?? 9))
-    const placed: { x1: number; y1: number; x2: number; y2: number }[] = []
-    const dots = new Set<string>()
-    for (const id of order) {
-      const p = map.project(centers[id])
-      const name = buildings.features.find((x) => x.properties.id === id)?.properties.name ?? id
-      const w = textWidth(name) + textWidth(String(scores[id] ?? 0)) + LABEL_EXTRA_PX
-      const box = { x1: p.x - w / 2, x2: p.x + w / 2, y1: p.y - LABEL_HEIGHT_PX / 2, y2: p.y + LABEL_HEIGHT_PX / 2 }
-      const hits = placed.some((b) => !(box.x2 < b.x1 || box.x1 > b.x2 || box.y2 < b.y1 || box.y1 > b.y2))
-      if (hits && id !== selectedId) dots.add(id)
-      else placed.push(box)
+    type Box = { x1: number; y1: number; x2: number; y2: number }
+    // One placement pass. `allowFull` false means every label except the selected
+    // one is small, which frees room when the wide labels crowd everything else.
+    const run = (allowFull: boolean) => {
+      const placed: Box[] = []
+      const overlaps = (box: Box) => placed.some((b) => !(box.x2 < b.x1 || box.x1 > b.x2 || box.y2 < b.y1 || box.y1 > b.y2))
+      const result: Record<string, LabelPlace> = {}
+      let clean = true
+      for (const id of order) {
+        const p = map.project(centers[id])
+        const name = buildings.features.find((x) => x.properties.id === id)?.properties.name ?? id
+        const fullW = textWidth(name, FULL.font) + textWidth(String(scores[id] ?? 0), FULL.font) + FULL.extra
+        const smallW = textWidth(name, SMALL.font) + SMALL.extra
+        const step = SMALL.height + 2
+        const side = smallW / 2 + 8
+        const full: LabelPlace & { w: number; h: number } = { size: 'full', dx: 0, dy: 0, w: fullW, h: FULL.height }
+        const smalls: (LabelPlace & { w: number; h: number })[] = [
+          { size: 'small', dx: 0, dy: 0, w: smallW, h: SMALL.height },
+          { size: 'small', dx: 0, dy: -step, w: smallW, h: SMALL.height },
+          { size: 'small', dx: 0, dy: step, w: smallW, h: SMALL.height },
+          { size: 'small', dx: side, dy: 0, w: smallW, h: SMALL.height },
+          { size: 'small', dx: -side, dy: 0, w: smallW, h: SMALL.height },
+        ]
+        const options = allowFull ? [full, ...smalls] : smalls
+        const boxOf = (o: LabelPlace & { w: number; h: number }) =>
+          ({ x1: p.x + o.dx - o.w / 2, x2: p.x + o.dx + o.w / 2, y1: p.y + o.dy - o.h / 2, y2: p.y + o.dy + o.h / 2 })
+        let fit = id === selectedId ? full : options.find((o) => !overlaps(boxOf(o)))
+        if (!fit) { fit = smalls[0]; clean = false }
+        placed.push(boxOf(fit))
+        result[id] = { size: fit.size, dx: fit.dx, dy: fit.dy }
+      }
+      return { result, clean }
     }
-    setDotIds((prev) => (prev.size === dots.size && [...dots].every((d) => prev.has(d)) ? prev : dots))
+    // Prefer full labels; if that leaves any label without a free spot, go all-small.
+    const first = run(true)
+    const next = first.clean ? first.result : run(false).result
+    setPlaces((prev) => {
+      const same = Object.keys(next).length === Object.keys(prev).length &&
+        Object.entries(next).every(([k, v]) => prev[k]?.size === v.size && prev[k]?.dx === v.dx && prev[k]?.dy === v.dy)
+      return same ? prev : next
+    })
   }, [centers, selectedId, buildings, scores, textWidth])
   useEffect(() => { declutter() }, [declutter])
 
@@ -200,29 +233,20 @@ export function CampusMap({ buildings, scores, selectedId, is3D, onSelect }: Pro
       {Object.entries(centers).map(([id, c]) => {
         const f = buildings.features.find((x) => x.properties.id === id)!
         const s = scores[id] ?? 0
-        if (dotIds.has(id)) {
-          // Crowded: show just the coloured dot; the name is still spoken and shown on hover
-          return (
-            <Marker key={id} longitude={c[0]} latitude={c[1]} anchor="center"
-              onClick={(e) => { e.originalEvent.stopPropagation(); onSelect(id) }}>
-              <button type="button" aria-label={`${f.properties.name}, score ${s}`} title={f.properties.name}
-                className="grid h-7 w-7 place-items-center rounded-full">
-                <span aria-hidden="true" className="h-3.5 w-3.5 rounded-full shadow-lg ring-2 ring-white/85" style={{ background: heatColor(s) }} />
-              </button>
-            </Marker>
-          )
-        }
+        const place = places[id] ?? { size: 'full', dx: 0, dy: 0 }
+        const small = place.size === 'small'
         return (
-          <Marker key={id} longitude={c[0]} latitude={c[1]} anchor="center"
+          <Marker key={id} longitude={c[0]} latitude={c[1]} anchor="center" offset={[place.dx, place.dy]}
             onClick={(e) => { e.originalEvent.stopPropagation(); onSelect(id) }}>
             <button
               type="button"
-              className={`glass flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold text-white shadow-lg transition hover:scale-105 ${selectedId === id ? 'ring-2 ring-white' : ''}`}
+              aria-label={`${f.properties.name}, score ${s}`}
+              className={`glass flex items-center rounded-full font-semibold text-white shadow-lg transition hover:scale-105 ${small ? 'gap-1 px-1.5 py-0.5 text-[9.5px]' : 'gap-1.5 px-2.5 py-1 text-[11px]'} ${selectedId === id ? 'ring-2 ring-white' : ''}`}
               title={f.properties.approx ? 'Approximate location: no outline found in OpenStreetMap' : f.properties.osmName}
             >
-              <span className="inline-block h-2 w-2 rounded-full" style={{ background: heatColor(s) }} />
+              <span aria-hidden="true" className={`inline-block rounded-full ${small ? 'h-1.5 w-1.5' : 'h-2 w-2'}`} style={{ background: heatColor(s) }} />
               {f.properties.name}
-              <span className="tabular-nums opacity-70">{s}</span>
+              {!small && <span className="tabular-nums opacity-70">{s}</span>}
             </button>
           </Marker>
         )
