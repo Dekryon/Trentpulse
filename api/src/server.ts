@@ -341,6 +341,15 @@ app.get('/api/stats', async () => {
   }
 })
 
+// GET /api/events : campus events (300+ people) so students can plan around them.
+// Stored in the lectures table with a title; dow is ISO (1 Mon .. 7 Sun), times are campus time.
+app.get('/api/events', async () => {
+  const r = await pool.query<{ title: string | null; space_id: string; dow: number; starts: string; ends: string; est_size: number }>(
+    `SELECT title, space_id, dow, to_char(starts, 'HH24:MI') AS starts, to_char(ends, 'HH24:MI') AS ends, est_size
+     FROM lectures WHERE est_size >= 300 ORDER BY dow, starts`)
+  return r.rows.map((e) => ({ ...e, title: e.title ?? 'Campus event' }))
+})
+
 app.get('/health', async () => ({ ok: true }))
 
 const port = Number(process.env.PORT ?? 3001)

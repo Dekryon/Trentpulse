@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS lectures (
   ends      TIME NOT NULL,
   est_size  INT NOT NULL
 );
+-- 300+ people means a campus event, not a class; title names it on the Events panel
+ALTER TABLE lectures ADD COLUMN IF NOT EXISTS title TEXT;
 
 -- 5-minute rollup of check-ins, kept fresh every minute (live map)
 CREATE MATERIALIZED VIEW IF NOT EXISTS busyness_5m

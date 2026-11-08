@@ -98,7 +98,7 @@ export async function computeScores(at: Date): Promise<{ scores: Record<string, 
     }
     const since = (hours - L.e) * 60
     if (since >= 0 && since <= 25) {
-      events.push(`Lecture let out ${Math.round(since)} min ago at ${where.name}`)
+      events.push(`${L.est_size >= 300 ? 'Event ended' : 'Lecture let out'} ${Math.round(since)} min ago at ${where.name}`)
       for (const s of spaces) {
         if (s.type === 'lecture') continue
         boost[s.id] += (L.est_size / 260) * 100 * Math.exp(-meters(where, s) / 450) * (1 - since / 25)

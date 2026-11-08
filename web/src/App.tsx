@@ -7,7 +7,8 @@ import { TimeBar } from './components/TimeBar'
 import { CheckInSheet } from './components/CheckInSheet'
 import { SpaceList } from './components/SpaceList'
 import { AskPanel } from './components/AskPanel'
-import { USING_MOCK, fetchNow, fetchStats, sendCheckin } from './lib/api'
+import { EventsPanel } from './components/EventsPanel'
+import { USING_MOCK, fetchNow, sendCheckin } from './lib/api'
 import { loadBuildings } from './lib/geo'
 import { checkinsToday } from './lib/mockApi'
 import type { CheckinBody } from './lib/types'
@@ -58,12 +59,13 @@ export default function App() {
     window.matchMedia(SMALL_QUERY).matches ? null : 'bata')
   const [checkinOpen, setCheckinOpen] = useState(false)
   // The side panel: the list of all spaces, or Ask TrentPulse (one at a time)
-  const [side, setSide] = useState<'list' | 'ask' | null>(null)
-  const toggleSide = (which: 'list' | 'ask') => setSide((v) => (v === which ? null : which))
+  type Side = 'list' | 'ask' | 'events'
+  const [side, setSide] = useState<Side | null>(null)
+  const toggleSide = (which: Side) => setSide((v) => (v === which ? null : which))
 
   // When a panel closes, put keyboard focus back on the button that opened it,
   // so keyboard and screen reader users don't land back at the top of the page.
-  const sideButtons = useRef<Record<'list' | 'ask', HTMLButtonElement | null>>({ list: null, ask: null })
+  const sideButtons = useRef<Record<Side, HTMLButtonElement | null>>({ list: null, ask: null, events: null })
   function closeSide() {
     const which = side
     setSide(null)
@@ -109,9 +111,6 @@ export default function App() {
     refetchInterval: live ? 15_000 : false,
     placeholderData: (prev) => prev,
   })
-
-  // Tiger Data numbers for the stats tile; they change slowly, so once a minute
-  const stats = useQuery({ queryKey: ['stats'], queryFn: fetchStats, refetchInterval: 60_000 })
 
   // Keep the clock moving in live mode
   useEffect(() => {
@@ -162,6 +161,8 @@ export default function App() {
 
   const sidePanel = side === 'ask'
     ? <AskPanel onClose={closeSide} />
+    : side === 'events'
+      ? <EventsPanel onClose={closeSide} onSelect={pickFromList} />
     : side === 'list' && now.data
       ? <SpaceList spaces={now.data.spaces} selectedId={selectedId} onSelect={pickFromList} onClose={closeSide} />
       : null
@@ -176,7 +177,9 @@ export default function App() {
 
       <div className="h-full w-full" role="region" aria-label="Campus map. Each building's name and busyness is a button; the List button gives the same information as text.">
         {buildings.data ? (
-          <CampusMap buildings={buildings.data} scores={scores} selectedId={selectedId} is3D={is3D} foodMode={foodMode} onSelect={setSelectedId} />
+          <CampusMap buildings={buildings.data} scores={scores} selectedId={selectedId} is3D={is3D} foodMode={foodMode}
+            pad={isSmall ? undefined : { left: sidePanel ? 360 : 0, right: panel ? 360 : 0 }}
+            onSelect={setSelectedId} />
         ) : (
           <div className="grid h-full place-items-center text-white/75">Loading campus…</div>
         )}
@@ -188,18 +191,18 @@ export default function App() {
           <h1 className="glass pointer-events-auto m-0 rounded-xl px-3 py-2 font-[Archivo] text-lg font-extrabold">
             Trent<span className="text-gold">Pulse</span>
           </h1>
-          {(['list', 'ask'] as const).map((which) => (
+          {(['list', 'events'] as const).map((which) => (
             <button key={which} ref={(el) => { sideButtons.current[which] = el }}
               onClick={() => toggleSide(which)}
               aria-expanded={side === which} aria-controls={side === which ? `side-${which}` : undefined}
-              aria-label={which === 'list' ? 'List of all spaces' : 'Ask TrentPulse a question'}
+              aria-label={which === 'list' ? 'List of all spaces' : 'Events: big crowds coming up'}
               className={`pointer-events-auto flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold shadow-lg transition active:scale-[0.97] sm:px-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${side === which ? 'bg-gold text-black' : 'bg-trent text-white hover:brightness-110'}`}>
               {which === 'list' ? (
                 <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" /></svg>
               ) : (
-                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a8 8 0 0 1-11.8 7L4 20.5l1.5-4.7A8 8 0 1 1 21 12z" /></svg>
+                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /></svg>
               )}
-              <span className="hidden sm:inline">{which === 'list' ? 'List' : 'Ask'}</span>
+              <span className="hidden sm:inline">{which === 'list' ? 'List' : 'Events'}</span>
             </button>
           ))}
           {/* Food: highlight the dining halls and cafés on the map, dim everything else */}
@@ -220,7 +223,6 @@ export default function App() {
         </div>
         <TopTiles
           now={now.data}
-          stats={stats.data ?? null}
           checkins={USING_MOCK ? 180 + checkinsToday() : (now.data?.checkins_today ?? localCheckins)}
           timeLabel={timeLabel}
         />
@@ -248,12 +250,21 @@ export default function App() {
         {isSmall && !side && panel && (
           <div className="pointer-events-none flex max-h-[52vh] overflow-y-auto rounded-2xl">{panel}</div>
         )}
-        {!selected && !(isSmall && side) && (
-          <button onClick={() => setCheckinOpen(true)}
-            className="pointer-events-auto min-h-11 self-end rounded-full bg-trent px-5 py-3 font-semibold text-white shadow-xl hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
-            + Check in
+        <div className="flex items-end justify-between gap-2">
+          {/* Ask TrentPulse: a glowing orb, bottom left, always one tap away */}
+          <button ref={(el) => { sideButtons.current.ask = el }} onClick={() => toggleSide('ask')}
+            aria-expanded={side === 'ask'} aria-controls={side === 'ask' ? 'side-ask' : undefined}
+            aria-label="Ask TrentPulse a question"
+            className={`ask-orb pointer-events-auto grid h-14 w-14 place-items-center rounded-full text-white transition active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white ${side === 'ask' ? 'ask-orb-open' : ''}`}>
+            <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5c.6 4.6 2.9 6.9 7.5 7.5-4.6.6-6.9 2.9-7.5 7.5-.6-4.6-2.9-6.9-7.5-7.5 4.6-.6 6.9-2.9 7.5-7.5zM19 15.5c.3 2 1.2 2.9 3 3.2-1.8.3-2.7 1.2-3 3.3-.3-2.1-1.2-3-3-3.3 1.8-.3 2.7-1.2 3-3.2z" /></svg>
           </button>
-        )}
+          {!selected && !(isSmall && side) && (
+            <button onClick={() => setCheckinOpen(true)}
+              className="pointer-events-auto min-h-11 rounded-full bg-trent px-5 py-3 font-semibold text-white shadow-xl hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+              + Check in
+            </button>
+          )}
+        </div>
         <TimeBar
           minutes={minutes}
           day={day}

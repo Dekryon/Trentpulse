@@ -30,3 +30,18 @@ body { background: #0f1512; color: #e6ece8; font-family: var(--font-sans); }
 .maplibregl-ctrl-bottom-right,
 .maplibregl-ctrl-bottom-left { bottom: var(--bottom-ui, 0px); }
 .maplibregl-ctrl-attrib { font-size: 11px; }
+
+/* Ask orb: a soft glowing sphere in Trent green and gold. It breathes slowly
+   so it reads as alive; reduced-motion users get it still. */
+.ask-orb {
+  background: radial-gradient(circle at 32% 28%, #f3d68a 0%, #d9ac4f 22%, #2f8a5f 58%, #1d5c3f 100%);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.25) inset, 0 8px 24px rgba(0,0,0,.45), 0 0 28px rgba(217,172,79,.45);
+}
+.ask-orb-open { box-shadow: 0 0 0 2px #fff, 0 8px 24px rgba(0,0,0,.45), 0 0 36px rgba(217,172,79,.7); }
+@media (prefers-reduced-motion: no-preference) {
+  .ask-orb { animation: orb-breathe 3.6s ease-in-out infinite; }
+}
+@keyframes orb-breathe {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(255,255,255,.25) inset, 0 8px 24px rgba(0,0,0,.45), 0 0 22px rgba(217,172,79,.35); }
+  50% { box-shadow: 0 0 0 1px rgba(255,255,255,.25) inset, 0 8px 24px rgba(0,0,0,.45), 0 0 40px rgba(217,172,79,.65); }
+}

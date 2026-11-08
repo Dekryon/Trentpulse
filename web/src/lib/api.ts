@@ -61,6 +61,12 @@ export function fetchStats(): Promise<StatsResponse | null> {
   return BASE ? get('/api/stats') : Promise.resolve(null)
 }
 
+// Campus events (300+ people). dow is ISO: 1 Mon .. 7 Sun. Times are campus time, "HH:MM".
+export type CampusEvent = { title: string; space_id: string; dow: number; starts: string; ends: string; est_size: number }
+export function fetchEvents(): Promise<CampusEvent[]> {
+  return BASE ? get('/api/events') : Promise.resolve([])
+}
+
 export async function sendCheckin(body: CheckinBody): Promise<void> {
   if (!BASE) return mock.postCheckin(body)
   const r = await fetch(BASE + '/api/checkins', {

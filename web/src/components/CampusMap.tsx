@@ -15,6 +15,10 @@ const FULL = { font: '600 11px "IBM Plex Sans", ui-sans-serif, sans-serif', extr
 const SMALL = { font: '600 9.5px "IBM Plex Sans", ui-sans-serif, sans-serif', extra: 24, height: 22 }
 type LabelPlace = { size: 'full' | 'small'; dx: number; dy: number } // shift in px: dx left (-) or right (+), dy up (-) or down (+)
 const ICON_W = 14 // fork-and-knife icon plus its gap, on labels of buildings with food
+// In Food mode, food buildings are named by what you can eat there
+const FOOD_LABEL: Record<string, string> = {
+  sc: 'Starbucks', cc: 'Champlain dining hall', lec: 'Lady Eaton dining hall', oc: 'Otonabee dining hall + Tim Hortons',
+}
 
 // Fork and knife, drawn in the label's text colour. Marks buildings with food.
 function FoodIcon({ size }: { size: number }) {
@@ -59,10 +63,11 @@ interface Props {
   selectedId: string | null
   is3D: boolean
   foodMode: boolean // highlight buildings with food, dim the rest
+  pad?: { left: number; right: number } // px covered by side panels, kept clear of buildings
   onSelect: (id: string | null) => void
 }
 
-export function CampusMap({ buildings, scores, selectedId, is3D, foodMode, onSelect }: Props) {
+export function CampusMap({ buildings, scores, selectedId, is3D, foodMode, pad, onSelect }: Props) {
   const mapRef = useRef<MapRef>(null)
   const centers = useMemo(() => centroidsById(buildings), [buildings])
 
@@ -95,12 +100,19 @@ export function CampusMap({ buildings, scores, selectedId, is3D, foodMode, onSel
     })),
   }), [centers, scores])
 
-  // Zoom to fit campus once the outlines are loaded
+  // Fit campus into the part of the screen no panel covers, so every building
+  // stays visible and clickable. Runs on load and whenever a panel opens or closes.
+  const padL = pad?.left ?? 0, padR = pad?.right ?? 0
+  const fitted = useRef(false)
   useEffect(() => {
     const map = mapRef.current
     if (!map || !buildings.features.length) return
-    map.fitBounds(bbox(buildings), { padding: { top: 120, bottom: 140, left: 40, right: 40 }, duration: 0, maxZoom: 17 })
-  }, [buildings])
+    map.fitBounds(bbox(buildings), {
+      padding: { top: 150, bottom: 140, left: 40 + padL, right: 40 + padR },
+      duration: fitted.current ? 600 : 0, maxZoom: 17,
+    })
+    fitted.current = true
+  }, [buildings, padL, padR])
 
   // Tilt into 3D and back
   useEffect(() => {
@@ -126,7 +138,7 @@ export function CampusMap({ buildings, scores, selectedId, is3D, foodMode, onSel
   const declutter = useCallback(() => {
     const map = mapRef.current
     if (!map) return
-    const order = Object.keys(centers).sort((a, b) =>
+    const order = Object.keys(centers).filter((id) => !(foodMode && !SPACE_BY_ID[id]?.food)).sort((a, b) =>
       (a === selectedId ? -1 : 0) - (b === selectedId ? -1 : 0) ||
       (LABEL_PRIORITY[SPACE_BY_ID[a]?.type] ?? 9) - (LABEL_PRIORITY[SPACE_BY_ID[b]?.type] ?? 9))
     type Box = { x1: number; y1: number; x2: number; y2: number }
@@ -139,7 +151,7 @@ export function CampusMap({ buildings, scores, selectedId, is3D, foodMode, onSel
       let clean = true
       for (const id of order) {
         const p = map.project(centers[id])
-        const name = buildings.features.find((x) => x.properties.id === id)?.properties.name ?? id
+        const name = (foodMode && FOOD_LABEL[id]) || (buildings.features.find((x) => x.properties.id === id)?.properties.name ?? id)
         const icon = SPACE_BY_ID[id]?.food ? ICON_W : 0
         const fullW = textWidth(name, FULL.font) + textWidth(String(scores[id] ?? 0), FULL.font) + FULL.extra + icon
         const smallW = textWidth(name, SMALL.font) + SMALL.extra + icon
@@ -171,7 +183,7 @@ export function CampusMap({ buildings, scores, selectedId, is3D, foodMode, onSel
         Object.entries(next).every(([k, v]) => prev[k]?.size === v.size && prev[k]?.dx === v.dx && prev[k]?.dy === v.dy)
       return same ? prev : next
     })
-  }, [centers, selectedId, buildings, scores, textWidth])
+  }, [centers, selectedId, buildings, scores, textWidth, foodMode])
   useEffect(() => { declutter() }, [declutter])
 
   // The imagery and OpenStreetMap credits must stay reachable, but not cover the app.
@@ -260,6 +272,9 @@ export function CampusMap({ buildings, scores, selectedId, is3D, foodMode, onSel
         const small = place.size === 'small'
         const food = SPACE_BY_ID[id]?.food
         const dimmed = foodMode && !food
+        // Food mode: only places to eat keep a label, named by the food
+        if (dimmed) return null
+        const label = (foodMode && FOOD_LABEL[id]) || f.properties.name
         return (
           <Marker key={id} longitude={c[0]} latitude={c[1]} anchor="center" offset={[place.dx, place.dy]}
             onClick={(e) => { e.originalEvent.stopPropagation(); onSelect(id) }}>
@@ -273,7 +288,7 @@ export function CampusMap({ buildings, scores, selectedId, is3D, foodMode, onSel
             >
               <span aria-hidden="true" className={`inline-block rounded-full ${small ? 'h-1.5 w-1.5' : 'h-2 w-2'}`} style={{ background: heatColor(s) }} />
               {food && <FoodIcon size={small ? 10 : 12} />}
-              {f.properties.name}
+              {label}
               {!small && <span className="tabular-nums opacity-70">{s}</span>}
             </button>
           </Marker>
