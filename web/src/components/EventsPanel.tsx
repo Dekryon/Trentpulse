@@ -76,8 +76,11 @@ export function EventsPanel({ onClose, onSelect }: { onClose: () => void; onSele
             <li key={`${e.space_id}-${e.dow}-${e.starts}`}>
               <button onClick={() => onSelect(e.space_id)}
                 aria-label={`${e.title}, ${place}, ${w.dayWord} ${time12(e.starts)} to ${time12(e.ends)}, about ${e.est_size} people. ${w.status}. Show on map.`}
-                className={`flex w-full flex-col gap-0.5 rounded-xl px-3 py-2.5 text-left hover:bg-white/10 ${focus} ${w.live ? 'bg-[#d9472b]/15 ring-1 ring-[#d9472b]/60' : 'bg-white/[0.04]'}`}>
-                <span className={`text-xs font-bold uppercase tracking-wide ${w.live ? 'text-[#ff8a6b]' : 'text-gold'}`}>{w.status}</span>
+                className={`flex w-full flex-col gap-0.5 rounded-xl bg-white/[0.04] px-3 py-2.5 text-left hover:bg-white/10 ${focus}`}>
+                <span className="flex items-center gap-1.5 text-[13px] font-semibold text-white/85">
+                  {w.live && <span aria-hidden="true" className="h-2 w-2 rounded-full bg-[#d9472b]" />}
+                  {w.status}
+                </span>
                 <span className="font-semibold leading-snug">{e.title}</span>
                 <span className="text-[13px] text-white/80">{place} · {w.dayWord} {time12(e.starts)} to {time12(e.ends)}</span>
                 <span className="text-xs text-white/70">About {e.est_size} people expected</span>

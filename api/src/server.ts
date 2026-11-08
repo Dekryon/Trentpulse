@@ -189,7 +189,7 @@ app.get('/api/suggest', async (req, reply) => {
 Current busyness on Symons Campus:
 ${list}
 The student is looking at ${here.name}. In one short sentence (max 20 words), say how busy it is and,
-if it is busy or packed, suggest the best quieter alternative. Friendly, no emojis.`
+if it is busy or packed, suggest the best quieter alternative. Friendly and plain, no emojis, no exclamation marks.`
   const text = await generate(prompt, 5000, req.log)
   if (!text) return { text: fallback() }
   tipCache.set(cacheKey, { text, at: Date.now() })
@@ -251,7 +251,7 @@ Answer the student's question using only the data below. Scores run from 0 (empt
 Food on campus: dining halls in Champlain College, Lady Eaton College and Otonabee College; Starbucks in the Student Centre; Tim Hortons in Otonabee College. A building's score covers the whole building, food line included, so use it to answer questions about eating, lunch, coffee or dining halls.
 Questions about where to study, eat, get coffee or hang out on campus, or how busy a place is now or later, are always in scope: answer them.
 Only if a question has nothing to do with campus places (for example homework, news or general chat), say briefly that you can only help with how busy campus spaces are.
-Never invent buildings, events, opening hours or numbers that are not in the data. Answer in at most 2 short sentences. Friendly, plain text, no emojis, no markdown.
+Never invent buildings, events, opening hours or numbers that are not in the data. Answer in at most 2 short sentences. Friendly, plain text, no emojis, no exclamation marks, no markdown.
 
 Campus time now: ${campusClock(at, true)}.
 Busyness right now:

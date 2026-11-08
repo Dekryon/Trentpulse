@@ -41,7 +41,7 @@ export function BuildingPanel({ space, at, events, compact = false, onClose, onC
     <section aria-label={`${def.name} details`} className="glass glass-solid pointer-events-auto w-full rounded-2xl p-4 shadow-2xl sm:w-[340px]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-xs uppercase tracking-wide text-white/75">{def.bank === 'west' ? 'West Bank' : 'East Bank'}</div>
+          <div className="text-xs text-white/70">{def.bank === 'west' ? 'West Bank' : 'East Bank'}</div>
           <h2 className="font-[Archivo] text-xl font-extrabold leading-tight">{def.name}</h2>
           {def.food && <p className="mt-0.5 text-[13px] text-white/85">Food here: {def.food}</p>}
         </div>
@@ -99,7 +99,7 @@ export function BuildingPanel({ space, at, events, compact = false, onClose, onC
       )}
 
       <div className="mt-3 rounded-lg bg-white/[0.08] px-3 py-2 text-sm leading-relaxed" aria-live="polite">
-        <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-gold">Tip</span>
+        <span className="mr-1 font-semibold text-gold">Tip:</span>
         {suggest.isLoading ? 'Thinking…' : suggest.data?.text}
       </div>
 
