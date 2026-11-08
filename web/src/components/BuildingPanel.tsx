@@ -21,12 +21,12 @@ export function BuildingPanel({ space, at, events, compact = false, onClose, onC
     queryFn: () => fetchSuggest(space.id, at),
   })
 
-  // Line up "today" and "typical" by time for the chart
-  const rows = (history.data?.typical ?? []).map((p, i) => ({
-    time: new Date(p.t).toLocaleTimeString([], { hour: 'numeric' }),
-    typical: p.score,
-    today: history.data?.today[i]?.score,
-  }))
+  // Line up "today" and "typical" by hour for the chart (7 am to 11 pm)
+  const todayByHour = new Map((history.data?.today ?? []).map((p) => [new Date(p.t).getHours(), p.score]))
+  const rows = (history.data?.typical ?? []).map((p) => {
+    const d = new Date(p.t)
+    return { time: d.toLocaleTimeString([], { hour: 'numeric' }), typical: p.score, today: todayByHour.get(d.getHours()) }
+  })
   const relevant = events.filter((e) => e.includes(def.name) || e.toLowerCase().includes('let out'))
 
   return (
