@@ -21,19 +21,19 @@ export function BuildingPanel({ space, at, events, compact = false, onClose, onC
     queryFn: () => fetchSuggest(space.id, at),
   })
 
-  // Line up "today" and "typical" by time for the chart
-  const rows = (history.data?.typical ?? []).map((p, i) => ({
-    time: new Date(p.t).toLocaleTimeString([], { hour: 'numeric' }),
-    typical: p.score,
-    today: history.data?.today[i]?.score,
-  }))
+  // Line up "today" and "typical" by hour for the chart (7 am to 11 pm)
+  const todayByHour = new Map((history.data?.today ?? []).map((p) => [new Date(p.t).getHours(), p.score]))
+  const rows = (history.data?.typical ?? []).map((p) => {
+    const d = new Date(p.t)
+    return { time: d.toLocaleTimeString([], { hour: 'numeric' }), typical: p.score, today: todayByHour.get(d.getHours()) }
+  })
   const relevant = events.filter((e) => e.includes(def.name) || e.toLowerCase().includes('let out'))
 
   return (
     <section aria-label={`${def.name} details`} className="glass glass-solid pointer-events-auto w-full rounded-2xl p-4 shadow-2xl sm:w-[340px]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-[11px] uppercase tracking-wide text-white/60">{def.bank === 'west' ? 'West Bank' : 'East Bank'}</div>
+          <div className="text-xs text-white/60">{def.bank === 'west' ? 'West Bank' : 'East Bank'}</div>
           <h2 className="font-[Archivo] text-xl font-extrabold leading-tight">{def.name}</h2>
         </div>
         <button onClick={onClose} aria-label={`Close ${def.name} details`}
@@ -80,7 +80,7 @@ export function BuildingPanel({ space, at, events, compact = false, onClose, onC
       )}
 
       <div className="mt-3 rounded-lg bg-white/[0.06] px-3 py-2 text-sm">
-        <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-gold">Tip</span>
+        <span className="mr-1 font-semibold text-gold">Tip:</span>
         {suggest.isLoading ? 'Thinking…' : suggest.data?.text}
       </div>
 
