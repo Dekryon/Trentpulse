@@ -44,6 +44,14 @@ export function CampusMap({ buildings, scores, selectedId, is3D, onSelect }: Pro
   const mapRef = useRef<MapRef>(null)
   const centers = useMemo(() => centroidsById(buildings), [buildings])
 
+  // Keep the map on campus: panning stops about 1 km beyond the outermost
+  // buildings, so nobody can drag or zoom their way out to the rest of the world.
+  const campusLimits = useMemo<[number, number, number, number]>(() => {
+    const [[w, s], [e, n]] = bbox(buildings)
+    const padLng = 0.013, padLat = 0.009 // roughly 1 km at Trent's latitude
+    return [w - padLng, s - padLat, e + padLng, n + padLat] // west, south, east, north
+  }, [buildings])
+
   // Put the live score on every building so the map can colour it
   const data = useMemo<Buildings>(() => ({
     ...buildings,
@@ -96,6 +104,9 @@ export function CampusMap({ buildings, scores, selectedId, is3D, onSelect }: Pro
       onSourceData={collapseCredits}
       onIdle={collapseCredits}
       maxPitch={70}
+      maxBounds={campusLimits}
+      minZoom={14}   // whole campus and its surroundings, no further out
+      maxZoom={19}   // the sharpest satellite detail available
       interactiveLayerIds={['bld-fill', 'bld-3d']}
       onClick={(e) => onSelect((e.features?.[0]?.properties?.id as string | undefined) ?? null)}
       cursor="pointer"
