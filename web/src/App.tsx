@@ -192,14 +192,20 @@ export default function App() {
             <button key={which} ref={(el) => { sideButtons.current[which] = el }}
               onClick={() => toggleSide(which)}
               aria-expanded={side === which} aria-controls={side === which ? `side-${which}` : undefined}
-              className={`glass pointer-events-auto min-h-11 rounded-xl px-3.5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${side === which ? 'bg-white/20 text-white' : 'text-white/85 hover:bg-white/10'}`}>
-              {which === 'list' ? 'List' : 'Ask'}
+              aria-label={which === 'list' ? 'List of all spaces' : 'Ask TrentPulse a question'}
+              className={`pointer-events-auto flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold shadow-lg transition active:scale-[0.97] sm:px-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${side === which ? 'bg-gold text-black' : 'bg-trent text-white hover:brightness-110'}`}>
+              {which === 'list' ? (
+                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" /></svg>
+              ) : (
+                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a8 8 0 0 1-11.8 7L4 20.5l1.5-4.7A8 8 0 1 1 21 12z" /></svg>
+              )}
+              <span className="hidden sm:inline">{which === 'list' ? 'List' : 'Ask'}</span>
             </button>
           ))}
           {/* Food: highlight the dining halls and cafés on the map, dim everything else */}
           <button onClick={() => setFoodMode((v) => !v)} aria-pressed={foodMode}
             aria-label="Food: highlight dining halls and cafés on the map"
-            className={`pointer-events-auto flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold sm:px-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${foodMode ? 'bg-gold text-black shadow-lg' : 'glass text-white/85 hover:bg-white/10'}`}>
+            className={`pointer-events-auto flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold shadow-lg transition active:scale-[0.97] sm:px-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${foodMode ? 'bg-gold text-black' : 'bg-trent text-white hover:brightness-110'}`}>
             <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
               <path d="M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10" /><path d="M17 21V3c-2.2 1.4-3.5 4-3.5 7v3H17" />
             </svg>

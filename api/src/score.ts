@@ -81,12 +81,20 @@ export async function computeScores(at: Date): Promise<{ scores: Record<string, 
   const byId = Object.fromEntries(spaces.map((s) => [s.id, s]))
   const boost: Record<string, number> = Object.fromEntries(spaces.map((s) => [s.id, 0]))
   const events: string[] = []
+  // A row of 300 or more people is a campus event (like the HackTrent closing
+  // ceremony), not a class: the building itself is full while it runs.
+  const eventFloor: Record<string, number> = {}
   for (const L of lectures.rows) {
     const where = byId[L.space_id]
     if (!where) continue
     if (hours >= L.s && hours < L.e) {
       boost[L.space_id] += (L.est_size / 260) * 100
-      events.push(`In class: about ${L.est_size} students in ${where.name}`)
+      if (L.est_size >= 300) {
+        eventFloor[L.space_id] = 85
+        events.push(`Event now: about ${L.est_size} people at ${where.name}`)
+      } else {
+        events.push(`In class: about ${L.est_size} students in ${where.name}`)
+      }
     }
     const since = (hours - L.e) * 60
     if (since >= 0 && since <= 25) {
@@ -109,7 +117,7 @@ export async function computeScores(at: Date): Promise<{ scores: Record<string, 
     // weight, 2 get two thirds, 3 or more get all of it. The rest of that weight
     // stays on the baseline. With 0 or 3+ reports this is the original formula.
     const wLive = 0.5 * Math.min(l?.n ?? 0, 3) / 3
-    const score = wLive * Number(l?.live ?? 0) + (0.8 - wLive) * b + 0.2 * k
+    const score = Math.max(eventFloor[s.id] ?? 0, wLive * Number(l?.live ?? 0) + (0.8 - wLive) * b + 0.2 * k)
     scores[s.id] = Math.max(0, Math.min(100, Math.round(score)))
   }
   return { scores, reports, events }
