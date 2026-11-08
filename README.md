@@ -1,142 +1,180 @@
 # TrentPulse
 
-See how busy every study and hangout spot on Trent's Symons Campus is right now, and when it will be quiet. It needs no sensors: crowd check-ins plus the class schedule, stored as time-series data in Tiger Data. Built for HackTrent 2026.
+**How busy is every study and hangout spot on Trent University's Symons Campus right now, and when will it be quiet?**
 
-```
-trentpulse/
-├── web/     Front end (Greg)      React + Vite + TypeScript + Tailwind + MapLibre
-├── api/     API (Back end 2)      Node + Fastify + TypeScript + Gemini
-├── db/      Database (Back end 1) schema.sql for Tiger Data
-└── .vscode/ Recommended VS Code extensions
-```
+Live: **https://trentpulse.vercel.app** · Built for HackTrent 2026
+
+Big universities pay for door sensors (Waitz, Occuspace, Density) to answer this. Trent has nothing. TrentPulse answers it with zero hardware: students tap a one-second check-in, Tiger Data supplies the typical pattern for every weekday and hour, and a class schedule flags the rush after a big lecture. The result is a satellite map of campus where buildings glow from green to red and rise in 3D.
 
 ---
 
-## 1. Open it in VS Code
+## What you can do
 
-1. Unzip `trentpulse.zip` somewhere easy, like `Documents/trentpulse`.
-2. In VS Code: **File → Open Folder…** and pick the `trentpulse` folder.
-3. When VS Code asks to install the recommended extensions, click **Install**. Tailwind autocomplete is the important one.
-4. Open the terminal with **View → Terminal** (or Ctrl + `).
+- **See the whole campus at a glance.** Nine spaces on both banks of the Otonabee, coloured by busyness, with the level written as a word (Quiet, Moderate, Busy, Packed), never colour alone.
+- **Check in with one tap.** Pick 1 (empty) to 5 (packed). The map updates for everyone within 15 seconds.
+- **Check in from a photo.** Snap the room and Gemini suggests the level; you confirm with one tap.
+- **Ask a question.** "When will Bata be quieter?" Gemini answers from the live scores and the next four hours of the forecast.
+- **Scrub through the day.** Drag the time bar or press Play day to watch a typical day unfold, including the crowd after a lecture lets out.
+- **Tilt into 3D.** Busier buildings rise higher.
+- **Use it without the map.** The List view shows every space, quietest first, and works fully with a keyboard and a screen reader.
 
-You need **Node.js 20 or newer**. Check with `node -v`. If it's missing, install the LTS version from nodejs.org.
+## How the score works
 
-## 2. Run the front end (works right away, no back end needed)
+Every space gets a score from 0 to 100, recalculated on each request:
+
+```
+live weight = 0.5 × min(check-ins in the last 20 min, 3) ÷ 3
+score       = live weight × live + (0.8 − live weight) × baseline + 0.2 × lecture boost
+```
+
+- **live**: the average of recent check-ins, newer ones weighted more. Only each device's latest vote counts.
+- **baseline**: the typical score for this weekday and hour, read from a Tiger Data continuous aggregate.
+- **lecture boost**: while a big class is in session its building gets a boost; for 25 minutes after it ends, nearby spaces get one that fades with distance and time.
+
+One check-in already moves the map a little; three or more give live reports their full weight. With no check-ins the score rests on the baseline, so the map is never blank.
+
+Levels: 0 to 25 Quiet, 26 to 50 Moderate, 51 to 75 Busy, 76 to 100 Packed. All time maths uses campus time (America/Toronto).
+
+## Built on Tiger Data
+
+Tiger Data (TimescaleDB on Postgres) is the core of the project, not just storage. Every feature below is used by the live app.
+
+| Feature | Where | What it does for us |
+|---|---|---|
+| **Hypertables** | `checkins`, `samples` | Time-partitioned tables for every check-in and for the history feed |
+| **Continuous aggregate** `busyness_5m` | over `checkins` | 5-minute rollups, refreshed every minute, real-time |
+| **Continuous aggregate** `busyness_1h` | over `samples` | Hourly rollups that power the baseline, the forecast and the charts |
+| **Compression** | `samples`, segmented by `space_id` | Chunks older than 7 days are compressed automatically |
+| **Plain SQL** | everywhere | `time_bucket`, `DISTINCT ON`, window filters; nothing exotic |
+
+Current numbers, shown live in the app's Tiger Data tile and at `/api/stats`:
+
+- **1,166,400 rows** of history (90 days × 9 spaces × one per minute)
+- **122.8 MB → 2.0 MB** for the compressed chunks, **60.4×** across the whole table
+- **about 40 ms** to score all nine spaces (live check-ins, baseline and lecture boost together)
+
+The schema is in [`db/schema.sql`](db/schema.sql).
+
+## Built with Gemini
+
+Gemini does three jobs, all grounded in live Tiger Data rather than general knowledge:
+
+1. **Photo check-in (multimodal).** A downscaled room photo goes to Gemini, which rates how full the room is on our 1 to 5 scale with a short reason. It returns no level for photos it can't judge, and it is told never to describe people. The photo is never stored by TrentPulse.
+2. **Ask TrentPulse.** Free-text questions are answered from the current scores, trends, check-in counts and a four-hour forecast. Off-topic questions are politely declined.
+3. **Tips** in each building's panel, such as suggesting a quieter spot nearby.
+
+The free tier allows only about 20 requests per model per day, so the API chains five flash models, skips any model that reports its quota is used up, caches tips (15 min) and answers (5 min), and falls back to a plain answer from the data if Gemini is unavailable.
+
+## How it fits together
+
+```
+Phone or laptop ──page──▶ Vercel (website + building outlines)
+       │
+       ├──tiles──▶ Esri World Imagery
+       │
+       └──JSON──▶ Render (Fastify API) ──SQL──▶ Tiger Data
+                                        └─────▶ Gemini
+```
+
+| Part | Tech | Why |
+|---|---|---|
+| Website | React 19, Vite 8, TypeScript, Tailwind CSS v4 | Fast to build, one language with the API |
+| Map | MapLibre GL via react-map-gl, Esri satellite tiles | Free, no account; 2D heat map and 3D in one library |
+| Building shapes | OpenStreetMap, saved to `web/public/buildings.json` | Real outlines with no live map call during a demo |
+| Live data | TanStack Query (15 s polling), Recharts | The map stays live; today vs typical chart |
+| API | Node, Fastify 5, zod, pg, @google/genai | Light and quick; validates every request |
+| Database | Tiger Data | Time-series tables, rollups and compression |
+| Hosting | Vercel (website), Render (API, `render.yaml`) | Free tiers, quick deploys |
+
+## Privacy and trust
+
+- **No accounts and no personal data.** Each phone gets a random anonymous ID, used only so it gets one vote per building per 15 minutes. IP addresses are not stored.
+- **Location stays on the phone.** "Use my location" picks the nearest building in the browser and warns if you are clearly off campus. Coordinates are never sent.
+- **Photos are not stored.** A photo exists only for the request that sends it to Gemini.
+- **Fake check-ins can't flip the map.** Repeated taps from one device count once, live reports cap at half of the score, and the baseline anchors the rest.
+- **The API only serves our website.** Requests from other origins get a 403, and check-ins, questions and photos have per-network limits.
+
+## Accessibility
+
+- Busyness is always written as a word next to the colour.
+- The List view gives every space with its level, score and recent check-ins, and each row has a full spoken label.
+- Touch targets are at least 44 px on phones, every control has a visible focus ring, panels close with Escape and a close button, and animation respects reduced-motion settings.
+
+## Run it locally
+
+You need Node.js 20 or newer.
+
+**Website only, on built-in demo data (no keys needed):**
 
 ```bash
 cd web
 npm install
-npm run dev
+npm run dev          # http://localhost:5173
 ```
 
-Open the link it prints (usually http://localhost:5173). You get:
+**With the real API:**
 
-- The satellite map of Symons Campus. Esri imagery works with no key.
-- Buildings coloured by busyness, a heat glow, and labels with live scores.
-- The glass panel with a score bar, today vs typical chart, tip and check-in button.
-- The top tiles, the time scrubber, **Play day**, a day picker and the **3D** toggle.
-- The check-in sheet. Tap a level and the map changes.
-
-While `VITE_API_URL` is empty, the app runs on **built-in demo data** (`web/src/lib/mockApi.ts`), so you can build every screen before the API exists.
-
-### Get the real building outlines (do this once)
-
-The app first looks for `web/public/buildings.json`, then asks OpenStreetMap live, then falls back to placeholder squares.
-
-```bash
-cd web
-npm run fetch:buildings
-```
-
-This saves real outlines to `public/buildings.json`, so the demo never depends on a live map service. If it says a building is **Missing**, it prints every building name it found nearby. Adjust the name pattern for that building in `web/src/lib/spaces.ts` (the `match:` field) **and** in `web/scripts/fetch-buildings.mjs`, then run it again. Commit `buildings.json`.
-
-### Optional: MapTiler satellite
-
-Copy `web/.env.example` to `web/.env.local` and add a free key from maptiler.com:
-
-```
-VITE_MAPTILER_KEY=your_key
-```
-
-## 3. Put it on GitHub (so the team can share it)
-
-**Easiest way, in VS Code:**
-
-1. Click the **Source Control** icon on the left (the branch symbol).
-2. Click **Publish to GitHub**. Sign in to GitHub when it asks.
-3. Choose **Private** for now, or Public, since Devpost needs a public link at the end.
-4. Make sure the `.env` files are **not** ticked. `.gitignore` already skips them, which keeps your keys secret.
-
-**Teammates then:**
-
-1. Go to the repo on github.com, click **Code → copy the URL**.
-2. In VS Code: **Ctrl+Shift+P → "Git: Clone"**, paste the URL, then open the folder.
-3. Add teammates on github.com under **Settings → Collaborators** so they can push.
-
-**Daily flow:** pull before you start (**Source Control → ... → Pull**), commit small pieces with a clear message, then push (**Sync Changes**). To avoid stepping on each other, Greg works in `web/`, Back end 1 in `db/` and `api/scripts/`, and Back end 2 in `api/src/`.
-
-## 4. Back end setup (Back end 1 and 2)
-
-1. Create a free service on **Tiger Data** (tigerdata.com) and copy its connection string.
+1. Create a Tiger Data service (the trial, not the free plan, which lacks some features) and copy its connection string.
 2. Set up the API:
 
 ```bash
 cd api
 npm install
-cp .env.example .env        # then paste DATABASE_URL (and GEMINI_API_KEY if you have one)
-npm run db:schema           # creates tables, hypertables, aggregates, compression
-npm run seed                # 90 days of history, about 1.2M rows (a few minutes)
-npm run dev                 # API on http://localhost:3001
+cp .env.example .env   # paste DATABASE_URL, and GEMINI_API_KEY from Google AI Studio
+npm run db:schema      # tables, hypertables, aggregates, compression; every line prints "ok"
+npm run seed           # 90 days of history (SEED_DAYS=30 for a quicker run)
+npm run dev            # http://localhost:3001
 ```
 
-3. Test it: open http://localhost:3001/api/now and http://localhost:3001/api/stats
+3. Point the website at it: create `web/.env.local` with `VITE_API_URL=http://localhost:3001`, then restart `npm run dev` in `web/`.
 
-4. Point the front end at it, in `web/.env.local`:
+To refresh the building outlines from OpenStreetMap: `cd web && npm run fetch:buildings`.
 
-```
-VITE_API_URL=http://localhost:3001
-```
+## Deploy
 
-Restart `npm run dev` in `web/`. The "Demo data" badge disappears.
+- **API on Render:** New → Blueprint → this repo. `render.yaml` sets everything except the secrets; Render asks for `DATABASE_URL` and `GEMINI_API_KEY`. Set `CORS_ORIGIN` to the website's address.
+- **Website on Vercel:** root directory `web`, environment variable `VITE_API_URL` set to the API's address.
 
-### API endpoints (plan section 08)
+## API
 
-| Method | Path | What it does |
+All `/api` routes accept requests only from the allowed website origins.
+
+| Method | Path | What it returns |
 |---|---|---|
-| GET | `/api/spaces` | List of tracked places |
-| GET | `/api/now` | Live scores (the front end polls this every 15 s) |
-| GET | `/api/forecast?at=ISO` | Scores for any time (time scrubber) |
-| POST | `/api/checkins` | `{ "space_id": "bata", "level": 4 }` |
-| GET | `/api/spaces/:id/history` | Today vs typical for the chart |
-| GET | `/api/suggest?near=bata` | Gemini tip (rule-based if no key) |
-| GET | `/api/stats` | Rows, compression ratio, query time for the pitch |
+| GET | `/api/spaces` | The tracked spaces |
+| GET | `/api/now` | Live scores, levels, trends, check-in counts, events |
+| GET | `/api/forecast?at=ISO` | The same, for any time (time bar) |
+| GET | `/api/spaces/:id/history` | Today vs a typical day, hourly |
+| POST | `/api/checkins` | `{ space_id, level 1..5, device }` |
+| POST | `/api/photo-estimate` | `{ image (base64), mimeType }` → suggested level and reason |
+| POST | `/api/ask` | `{ question }` → answer from live data |
+| GET | `/api/suggest?near=id` | A short tip for one space |
+| GET | `/api/stats` | Row count, compression ratio, score query time |
+| GET | `/health` | Liveness check (open) |
 
-### Real lectures
+## Project layout
 
-`db/schema.sql` inserts **example** lectures. Replace them with about 30 of the biggest sections from the myTrent timetable (building, weekday, start, end, size). Don't scrape the portal; type them in.
+```
+web/   website: React, MapLibre, Tailwind
+api/   Fastify API, score function, Gemini, seed and schema scripts
+db/    schema.sql for Tiger Data
+```
 
-## 5. Deploy
+## What is real and what is simulated
 
-- **Front end:** vercel.com → New Project → import the repo → Root Directory `web` → add `VITE_API_URL` (your deployed API) → Deploy.
-- **API:** Vultr (sponsor prize) or Render as a quick backup. Root `api`, start command `npm start`, and add the same `.env` values. Set `CORS_ORIGIN` to your Vercel URL.
+- **Real:** the buildings and their outlines, every check-in, the scoring, the Tiger Data features and numbers, and the Gemini answers.
+- **Simulated:** the 90 days of history come from a seed script with hand-shaped daily curves per type of space (library, gym, college and so on). They give the baseline something to work with until real check-ins build up.
+- **Sample:** the lecture schedule is a sample of 12 big sections. Real class sizes and rooms sit behind the student portal, which we did not scrape.
 
-## Where things live (front end)
+## What's next
 
-| File | What it is |
-|---|---|
-| `web/src/App.tsx` | The page: state, polling, layout |
-| `web/src/components/CampusMap.tsx` | MapLibre map: satellite, building fill, heat glow, 3D, labels |
-| `web/src/components/BuildingPanel.tsx` | The glass detail card |
-| `web/src/components/TopTiles.tsx` | Number tiles across the top |
-| `web/src/components/TimeBar.tsx` | Live, scrubber, day, play, 3D |
-| `web/src/components/CheckInSheet.tsx` | 1 to 5 check-in |
-| `web/src/lib/api.ts` | Talks to the API, or the mock |
-| `web/src/lib/mockApi.ts` | Demo data, same shapes as the API |
-| `web/src/lib/spaces.ts` | The places we track and their OSM name patterns |
-| `web/src/lib/geo.ts` | Loads building outlines, centroids, distances |
-| `web/src/lib/types.ts` | Shared data shapes (copy also in `api/src/types.ts`) |
+- Trent's timetable feed from the Registrar, so every class counts automatically
+- Wi-Fi or card-swipe counts from Trent IT as a second live signal, still with no new hardware
+- QR codes at building entrances as proof of presence for check-ins
+- "Tell me when it's quiet" alerts for a chosen space
+- Forecasts learned from real check-in history instead of hand-shaped curves
+- More spaces, the Durham GTA campus, and other schools
 
-## Status
+## Team
 
-- Front end: builds and runs. Tested with demo data, including the check-in flow and the 3D toggle.
-- API and seed: type-check cleanly but **have not been run against a real Tiger Data service yet**. Run `npm run db:schema` first and watch for any `FAIL` lines.
+Built at HackTrent 2026 by Gregory Uku.
