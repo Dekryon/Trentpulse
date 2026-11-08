@@ -1,10 +1,17 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Map, { Layer, Marker, NavigationControl, Source, type MapRef } from 'react-map-gl/maplibre'
 import type { StyleSpecification } from 'maplibre-gl'
 import type { FeatureCollection, Point } from 'geojson'
 import { bbox, centroidsById, type Buildings } from '../lib/geo'
 import { HEAT_EXPR, heatColor } from '../lib/colors'
-import { CAMPUS_CENTER } from '../lib/spaces'
+import { CAMPUS_CENTER, SPACE_BY_ID } from '../lib/spaces'
+
+// When labels would overlap, the less important ones shrink to a dot.
+// Places students sit in come first; lecture halls give way first.
+const LABEL_PRIORITY: Record<string, number> = { study: 0, social: 1, college: 2, gym: 3, lecture: 4 }
+const LABEL_FONT = '600 11px "IBM Plex Sans", ui-sans-serif, sans-serif'
+const LABEL_EXTRA_PX = 44 // padding, colour dot, gaps and a little breathing room
+const LABEL_HEIGHT_PX = 30
 
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY as string | undefined
 
@@ -80,6 +87,39 @@ export function CampusMap({ buildings, scores, selectedId, is3D, onSelect }: Pro
 
   const vis = (show: boolean) => ({ visibility: show ? 'visible' : 'none' }) as const
 
+  // Label decluttering. After every move, work out where each label would sit
+  // on screen; any label that would overlap one already placed becomes a dot.
+  // The selected building always keeps its full label. Names return on zoom-in.
+  const [dotIds, setDotIds] = useState<Set<string>>(() => new Set())
+  const textWidth = useMemo(() => {
+    const ctx = document.createElement('canvas').getContext('2d')
+    return (text: string) => {
+      if (!ctx) return text.length * 6.5
+      ctx.font = LABEL_FONT
+      return ctx.measureText(text).width
+    }
+  }, [])
+  const declutter = useCallback(() => {
+    const map = mapRef.current
+    if (!map) return
+    const order = Object.keys(centers).sort((a, b) =>
+      (a === selectedId ? -1 : 0) - (b === selectedId ? -1 : 0) ||
+      (LABEL_PRIORITY[SPACE_BY_ID[a]?.type] ?? 9) - (LABEL_PRIORITY[SPACE_BY_ID[b]?.type] ?? 9))
+    const placed: { x1: number; y1: number; x2: number; y2: number }[] = []
+    const dots = new Set<string>()
+    for (const id of order) {
+      const p = map.project(centers[id])
+      const name = buildings.features.find((x) => x.properties.id === id)?.properties.name ?? id
+      const w = textWidth(name) + textWidth(String(scores[id] ?? 0)) + LABEL_EXTRA_PX
+      const box = { x1: p.x - w / 2, x2: p.x + w / 2, y1: p.y - LABEL_HEIGHT_PX / 2, y2: p.y + LABEL_HEIGHT_PX / 2 }
+      const hits = placed.some((b) => !(box.x2 < b.x1 || box.x1 > b.x2 || box.y2 < b.y1 || box.y1 > b.y2))
+      if (hits && id !== selectedId) dots.add(id)
+      else placed.push(box)
+    }
+    setDotIds((prev) => (prev.size === dots.size && [...dots].every((d) => prev.has(d)) ? prev : dots))
+  }, [centers, selectedId, buildings, scores, textWidth])
+  useEffect(() => { declutter() }, [declutter])
+
   // The imagery and OpenStreetMap credits must stay reachable, but not cover the app.
   // Compact mode shows a small "i" button. MapLibre expands it (class
   // maplibregl-compact-show) once the credit text arrives, which can be after the
@@ -103,6 +143,8 @@ export function CampusMap({ buildings, scores, selectedId, is3D, onSelect }: Pro
       attributionControl={{ compact: true }}
       onSourceData={collapseCredits}
       onIdle={collapseCredits}
+      onLoad={declutter}
+      onMove={declutter}
       maxPitch={70}
       maxBounds={campusLimits}
       minZoom={14}   // whole campus and its surroundings, no further out
@@ -158,6 +200,18 @@ export function CampusMap({ buildings, scores, selectedId, is3D, onSelect }: Pro
       {Object.entries(centers).map(([id, c]) => {
         const f = buildings.features.find((x) => x.properties.id === id)!
         const s = scores[id] ?? 0
+        if (dotIds.has(id)) {
+          // Crowded: show just the coloured dot; the name is still spoken and shown on hover
+          return (
+            <Marker key={id} longitude={c[0]} latitude={c[1]} anchor="center"
+              onClick={(e) => { e.originalEvent.stopPropagation(); onSelect(id) }}>
+              <button type="button" aria-label={`${f.properties.name}, score ${s}`} title={f.properties.name}
+                className="grid h-7 w-7 place-items-center rounded-full">
+                <span aria-hidden="true" className="h-3.5 w-3.5 rounded-full shadow-lg ring-2 ring-white/85" style={{ background: heatColor(s) }} />
+              </button>
+            </Marker>
+          )
+        }
         return (
           <Marker key={id} longitude={c[0]} latitude={c[1]} anchor="center"
             onClick={(e) => { e.originalEvent.stopPropagation(); onSelect(id) }}>
