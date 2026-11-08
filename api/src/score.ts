@@ -55,14 +55,24 @@ export async function computeScores(at: Date): Promise<{ scores: Record<string, 
      FROM recent
      GROUP BY space_id`, [at.toISOString()])
 
-  // baseline: typical score for this weekday and hour
+  // baseline: typical score for this weekday and quarter hour (15-minute aggregate),
+  // so the rush when classes let out at :50 shows up, not just hourly averages
+  // Rather than scanning every bucket, list the exact matching slots (the same
+  // quarter hour on the same weekday in each of the past 13 weeks, worked out in
+  // campus time so daylight-saving changes don't shift them) and look those up
+  // by time, which uses the aggregate's time index.
   const base = await pool.query<{ space_id: string; typical: number }>(
-    `SELECT space_id, avg(avg_score) AS typical
-     FROM busyness_1h
-     WHERE extract(isodow FROM bucket AT TIME ZONE 'America/Toronto') = $1
-       AND extract(hour FROM bucket AT TIME ZONE 'America/Toronto') = $2
-       AND bucket < $3::timestamptz - INTERVAL '1 day'
-     GROUP BY space_id`, [dow, hour, at.toISOString()])
+    `WITH local_slot AS (
+       SELECT date_trunc('hour', $1::timestamptz AT TIME ZONE 'America/Toronto')
+              + floor(extract(minute FROM $1::timestamptz AT TIME ZONE 'America/Toronto') / 15) * INTERVAL '15 minutes' AS s
+     ), slots AS (
+       SELECT (s - w * INTERVAL '7 days') AT TIME ZONE 'America/Toronto' AS t
+       FROM local_slot, generate_series(1, 13) AS w
+     )
+     SELECT space_id, avg(avg_score) AS typical
+     FROM busyness_15m
+     WHERE bucket IN (SELECT t FROM slots)
+     GROUP BY space_id`, [at.toISOString()])
 
   const lectures = await pool.query<{ space_id: string; s: number; e: number; est_size: number }>(
     `SELECT space_id, extract(epoch FROM starts) / 3600 AS s, extract(epoch FROM ends) / 3600 AS e, est_size

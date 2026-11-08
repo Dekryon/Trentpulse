@@ -53,7 +53,20 @@ SELECT add_continuous_aggregate_policy('busyness_5m',
   start_offset => INTERVAL '1 day', end_offset => INTERVAL '1 minute',
   schedule_interval => INTERVAL '1 minute', if_not_exists => TRUE);
 
--- Hourly rollup of the big feed (baseline + charts)
+-- 15-minute rollup of the big feed: the baseline uses this so class-change rushes
+-- (students pouring out of lectures at :50) show on the map, not just hourly averages
+CREATE MATERIALIZED VIEW IF NOT EXISTS busyness_15m
+WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
+SELECT time_bucket('15 minutes', time) AS bucket, space_id,
+       avg(score)::float AS avg_score
+FROM samples GROUP BY bucket, space_id
+WITH NO DATA;
+
+SELECT add_continuous_aggregate_policy('busyness_15m',
+  start_offset => INTERVAL '120 days', end_offset => INTERVAL '15 minutes',
+  schedule_interval => INTERVAL '15 minutes', if_not_exists => TRUE);
+
+-- Hourly rollup of the big feed (charts)
 CREATE MATERIALIZED VIEW IF NOT EXISTS busyness_1h
 WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
 SELECT time_bucket('1 hour', time) AS bucket, space_id,
